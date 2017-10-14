@@ -14,7 +14,8 @@
     "purescript-debug": "^3.0.0",
     "purescript-lens": "^3.0.0",
     "purescript-profunctor-lenses": "^3.7.0",
-    "purescript-var": "^2.0.0"
+    "purescript-var": "^2.0.0",
+    "purescript-crypto": "^0.1.3"
   },
   "devDependencies": {
     "purescript-psci-support": "^3.0.0"

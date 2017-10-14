@@ -13,11 +13,11 @@
       };
       function loadFile(e) {
         console.log('loading');
-        filestack.main(e.files[0])(config)()();
+        filestack.main()(e.files[0])(config)()()();
       }
       var debug = {hello: "world"};
       var blob = new Blob([JSON.stringify(debug, null, 2)], {type : 'application/json'}); 
-      console.log(filestack.main(blob)(config)()()());
+      filestack.main()(blob)(config)()()();
     </script>
   </body>
 </html>
