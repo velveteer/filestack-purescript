@@ -1,0 +1,23 @@
+<!DOCTYPE html>
+<html>
+  <body>
+    <input type="file" onchange="loadFile(this)">
+    <script src="index.js"></script>
+    <script>
+      var config = {
+        apikey: 'Ag8sEzKMtSqq2dHyOyeK1z',
+        partSize: 6 * 1024 * 1024,
+        storeTo: {
+          location: 's3',
+        },
+      };
+      function loadFile(e) {
+        console.log('loading');
+        filestack.main(e.files[0])(config)()();
+      }
+      var debug = {hello: "world"};
+      var blob = new Blob([JSON.stringify(debug, null, 2)], {type : 'application/json'}); 
+      console.log(filestack.main(blob)(config)()()());
+    </script>
+  </body>
+</html>
