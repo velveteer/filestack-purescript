@@ -11,7 +11,7 @@ import Control.Monad.Reader (ask)
 import Control.Monad.State (get, put)
 import Control.Monad.RWS.Trans (RWST, runRWST)
 import Control.Monad.Trans.Class (lift)
-import Control.Monad.Writer (tell)
+import Control.Parallel (parTraverse)
 import DOM (DOM)
 import DOM.Event.EventTarget (eventListener, addEventListener)
 import DOM.File.Blob (slice, size, type_, idxFromNumber, StartByte(..), EndByte(..))
@@ -20,32 +20,33 @@ import DOM.File.Types (Blob, FileReader, fileReaderToEventTarget)
 import DOM.File.FileReader as FileReader
 import DOM.HTML.Event.EventTypes as EventTypes
 import DOM.XHR.FormData (toFormData, FormDataValue(..))
+import DOM.XHR.Types (FormData)
 import Data.Array (filter, range)
 import Data.ArrayBuffer.Types (ArrayBuffer)
 import Data.Bifunctor (rmap)
-import Data.Either (either, hush, Either(..), fromRight)
+import Data.Either (either, Either(..), fromRight)
 import Data.Foreign (F, Foreign, unsafeReadTagged, readString)
-import Data.Foreign.Generic (defaultOptions, genericDecode)
-import Data.Foreign.Generic.Types as GT
-import Data.Foreign.Class (class Decode)
 import Data.Foreign.NullOrUndefined (NullOrUndefined)
-import Data.Generic.Rep as Rep
-import Data.Generic.Rep.Show (genericShow)
-import Data.Int (toNumber, ceil, round, toStringAs, decimal)
-import Data.Maybe (Maybe(..), fromMaybe)
+import Data.Int (toNumber, round, toStringAs, decimal)
+import Data.Maybe (fromMaybe)
 import Data.MediaType.Common (applicationOctetStream)
-import Data.Newtype (unwrap, wrap)
+import Data.MediaType (MediaType)
+import Data.Newtype (class Newtype, unwrap)
+import Data.String (null, joinWith)
 import Data.Tuple (Tuple(..))
-
 import Network.HTTP.Affjax (AJAX, AffjaxResponse, post)
 import Node.Buffer (BUFFER)
 import Node.Crypto (CRYPTO)
 import Node.Crypto.Hash (base64, Algorithm(..))
-import Optic.Core ((..))
 import Optic.Getter ((^.))
 import Optic.Lens (lens)
 import Optic.Types (Lens, Lens')
+import Simple.JSON (class ReadForeign, read)
+import Debug.Trace (traceAnyA)
 
+--
+-- File API helpers
+--
 readAs :: forall eff a. (Foreign -> F a) -> (Blob -> FileReader -> Eff (dom :: DOM | eff) Unit) -> Blob -> Aff (dom :: DOM | eff) a
 readAs readMethod getResult blob = makeAff \cb -> do
   fr <- fileReader
@@ -73,9 +74,13 @@ newtype Config = Config
   , partSize :: Int
   , storeTo :: StoreOptions
   }
-derive instance genericConfig :: Rep.Generic Config _
-instance showConfig :: Show Config where
-  show = genericShow
+derive instance ntC :: Newtype Config _
+derive newtype instance rfC :: ReadForeign Config
+instance showC :: Show Config where
+  show (Config c) = [ "apikey: " <> c.apikey
+                    , "partSize: " <> show c.partSize
+                    , show c.storeTo
+                    ] # joinWith "\n"
 
 newtype StoreOptions = StoreOptions
   { location :: String
@@ -84,84 +89,18 @@ newtype StoreOptions = StoreOptions
   , path :: NullOrUndefined String
   , access :: NullOrUndefined String
   }
-derive instance genericStoreOptions :: Rep.Generic StoreOptions _
-instance showStoreOptions :: Show StoreOptions where
-  show = genericShow
-instance decodeStoreOptions :: Decode StoreOptions where
-  decode = genericDecode decodeOpts
+derive instance ntSO :: Newtype StoreOptions _
+derive newtype instance rfSO :: ReadForeign StoreOptions
+instance showSO :: Show StoreOptions where
+  show (StoreOptions so) = [ "store_location: " <> so.location
+                           , "store_region: " <> show so.region
+                           , "store_container: " <> show so.container
+                           , "store_path: " <> show so.path
+                           , "store_access: " <> show so.access
+                           ] # joinWith "\n"
 
 type Log = Array String
-
-newtype State = State { sParams :: Maybe StartParams }
-derive instance genericState :: Rep.Generic State _
-instance showState :: Show State where
-  show = genericShow
-
-type Env = RWST Config Log State
-
---
---  Lenses
---
-_Config :: forall f.
-  Functor f
-  => ( { apikey :: String , partSize :: Int , storeTo :: StoreOptions }
-  -> f { apikey :: String , partSize :: Int , storeTo :: StoreOptions } )
-  -> Config
-  -> f Config
-_Config = lens (\(Config x) -> x) (const Config)
-
-_StoreOptions :: forall f.
-  Functor f
-  => ( { location :: String
-       , region :: NullOrUndefined String
-       , container :: NullOrUndefined String
-       , path :: NullOrUndefined String
-       , access :: NullOrUndefined String
-      }
-  -> f { location :: String
-       , region :: NullOrUndefined String
-       , container :: NullOrUndefined String
-       , path :: NullOrUndefined String
-       , access :: NullOrUndefined String
-       }
-     )
-  -> StoreOptions
-  -> f StoreOptions
-_StoreOptions = lens (\(StoreOptions x) -> x) (const StoreOptions)
-
-_Part :: forall f.
-  Functor f
-  => ( { num :: Int , slice :: Blob }
-  -> f { num :: Int , slice :: Blob } )
-  -> Part
-  -> f Part
-_Part = lens (\(Part x) -> x) (const Part)
-
-_State :: forall f.
-  Functor f
-  => ( { sParams :: Maybe StartParams }
-  -> f { sParams :: Maybe StartParams } )
-  -> State
-  -> f State
-_State = lens (\(State x) -> x) (const State)
-
-_storeOpts :: forall f. Functor f
-  => ( { location :: String
-       , region :: NullOrUndefined String
-       , container :: NullOrUndefined String
-       , path :: NullOrUndefined String
-       , access :: NullOrUndefined String
-      }
-  -> f { location :: String
-       , region :: NullOrUndefined String
-       , container :: NullOrUndefined String
-       , path :: NullOrUndefined String
-       , access :: NullOrUndefined String
-       }
-     )
-  -> Config
-  -> f Config
-_storeOpts = _Config..storeTo.._StoreOptions
+type Env = RWST Config Log Params
 
 apikey :: forall a b r. Lens { apikey :: a | r } { apikey :: b | r } a b
 apikey = lens _.apikey (_ { apikey = _ })
@@ -171,8 +110,6 @@ storeTo :: forall a b r. Lens { storeTo :: a | r } { storeTo :: b | r } a b
 storeTo = lens _.storeTo (_ { storeTo = _ })
 location :: forall a b r. Lens { location :: a | r } { location :: b | r } a b
 location = lens _.location (_ { location = _ })
-sParams :: forall a b r. Lens { sParams :: a | r } { sParams :: b | r } a b
-sParams = lens _.sParams (_ { sParams = _ })
 
 --
 -- Upload types
@@ -180,99 +117,114 @@ sParams = lens _.sParams (_ { sParams = _ })
 newtype Part = Part
   { num :: Int
   , slice :: Blob
+  , md5 :: String
   }
 partSlice :: Lens' Part Blob
 partSlice  = lens (\(Part x) -> x.slice) (\(Part x) v -> Part x { slice = v })
 partNum :: Lens' Part Int
 partNum  = lens (\(Part x) -> x.num) (\(Part x) v -> Part x { num = v })
+partMD5 :: Lens' Part String
+partMD5 = lens (\(Part x) -> x.md5) (\(Part x) v -> Part x { md5 = v })
 
-newtype StartParams = StartParams
+newtype Params = Params
   { location_url :: String
   , region :: String
   , upload_id :: String
   , uri :: String
   }
-derive instance genericSP :: Rep.Generic StartParams _
-instance showSP :: Show StartParams where
-  show = genericShow
+derive instance ntSP :: Newtype Params _
+derive newtype instance rfP :: ReadForeign Params
 
-getFileType :: Blob -> String
-getFileType = unwrap <<< fromMaybe applicationOctetStream <<< type_
+initialParams :: Params
+initialParams = Params
+  { location_url: ""
+  , region: ""
+  , upload_id: ""
+  , uri: ""
+  }
 
-decodeOpts :: GT.Options
-decodeOpts = defaultOptions { unwrapSingleConstructors = true }
+getFileType :: Blob -> MediaType
+getFileType = fromMaybe applicationOctetStream <<< type_
 
-mkPart :: Blob -> Number -> Int -> Part
-mkPart file ps p = Part{ num: p, slice: slice' file }
-  where slice' = slice (wrap $ getFileType file) (StartByte startByte) (EndByte endByte)
-        p' = toNumber p
-        total = size file
-        startByte = idxFromNumber $ p' * ps
-        endByte = idxFromNumber $ min (p' * ps + ps) total
+mkPart :: Blob -> Number -> Int -> Aff Effects Part
+mkPart file ps p = do
+  let slice' = slice (getFileType file) (StartByte startByte) (EndByte endByte)
+      p' = toNumber p
+      total = size file
+      startByte = idxFromNumber $ p' * ps
+      endByte = idxFromNumber $ min (p' * ps + ps) total
+  text <- readAsText $ slice' file
+  md5 <- liftEff $ base64 MD5 text
+  pure $ Part{ num: p, slice: slice' file, md5: md5 }
 
-getCommonHeaders :: Maybe StartParams -> Array (Tuple String FormDataValue)
-getCommonHeaders Nothing = []
-getCommonHeaders (Just (StartParams sp)) = rmap FormDataString <$>
-  [ Tuple "region" sp.region
-  , Tuple "upload_id" sp.upload_id
-  , Tuple "uri" sp.uri
-  , Tuple "location_url" sp.location_url
-  ]
+getCommonFormData :: Env (Aff Effects) (Array (Tuple String FormDataValue))
+getCommonFormData = do
+  Config cfg <- ask
+  Params sp <- get
+  let so = unwrap (cfg ^. storeTo)
+  pure $ rmap FormDataString <$> (
+    [ Tuple "region" sp.region
+    , Tuple "upload_id" sp.upload_id
+    , Tuple "uri" sp.uri
+    , Tuple "location_url" sp.location_url
+    , Tuple "store_location" so.location
+    , Tuple "apikey" $ cfg ^. apikey
+    ] # filter (\(Tuple k v) -> null v == false)
+  )
 
--- |
--- Start the multipart upload flow
+mkFormData :: Array (Tuple String String) -> Env (Aff Effects) FormData
+mkFormData ts = do
+  base <- getCommonFormData
+  pure $ toFormData $ (rmap FormDataString <$> ts) <> base
+
+-- | Start the multipart upload flow
 start :: Blob -> Env (Aff Effects) (AffjaxResponse Foreign)
 start file = do
-  cfg <- ask
-  let fields = [ Tuple "apikey" (FormDataString $ cfg ^. _Config..apikey)
-               , Tuple "mimetype" (FormDataString <<< show $ getFileType file)
-               , Tuple "filename" (FormDataString "testfile") -- TODO getFilename
-               , Tuple "size" (FormDataString <<< show <<< round $ size file)
-               , Tuple "store_location" (FormDataString $ cfg ^. _storeOpts..location)
+  let fields = [ Tuple "mimetype" (show <<< unwrap $ getFileType file)
+               , Tuple "filename" "testfile" -- TODO getFilename
+               , Tuple "size" (show <<< round $ size file)
                ]
-      fd = toFormData fields
+  fd <- mkFormData fields
   lift $ post "https://upload.filestackapi.com/multipart/start" fd
 
 {-- newtype S3Params = S3Params --}
 {--   { url :: String --}
 {--   , location_url :: String --}
-{--   , headers :: Foreign --}
+{--   , formdata :: Foreign --}
 {--   } --}
 
 getS3Data :: Part -> Env (Aff Effects) (AffjaxResponse Foreign)
 getS3Data part = do
-  cfg <- ask
-  st <- get
-  text <- lift $ readAsText $ part ^. partSlice
-  md5 <- liftEff $ base64 MD5 text
-  let fields = (getCommonHeaders $ st ^. _State..sParams) <>
-               [ Tuple "size" (FormDataString <<< show <<< round <<< size $ part ^. partSlice)
-               , Tuple "md5" (FormDataString md5)
-               , Tuple "part" (FormDataString $ toStringAs decimal $ (part ^. partNum) + 1)
-               , Tuple "store_location" (FormDataString $ cfg ^. _storeOpts..location)
-               , Tuple "apikey" (FormDataString $ cfg ^. _Config..apikey)
-               ]
+  formdata <- getCommonFormData
+  let fields = (rmap FormDataString <$>
+               [ Tuple "size" $ show <<< round <<< size $ part ^. partSlice
+               , Tuple "md5" $ part ^. partMD5
+               , Tuple "part" $ toStringAs decimal $ (part ^. partNum) + 1
+               ]) <> formdata
       fd = toFormData fields
   lift $ post "https://upload.filestackapi.com/multipart/upload" fd
 
 upload :: Blob -> Env (Aff Effects) Unit
 upload file = do
   cfg <- ask
-  lift <<< liftEff <<< log $ show cfg
+  lift $ liftEff $ log $ show cfg
   let total = size file
-      ps = toNumber $ cfg ^. _Config..partSize
-      numParts = ceil $ total / ps
-      parts = mkPart file ps
-        <$> range 0 numParts
-          # filter \(Part p) -> (round $ size p.slice) > 0
+      ps = toNumber $ (unwrap cfg) ^. partSize
+      numParts = round $ total / ps
+  parts <- lift $ parTraverse (mkPart file ps) $ range 0 numParts
+  traceAnyA parts
   result <- start file
-  let sp = hush $ runExcept (genericDecode decodeOpts result.response)
-  put $ State{ sParams: sp }
-  get >>= \n -> tell [ "Received start parameters: " <> show n]
-  s3Data <- getS3Data $ Part { num: 1, slice: file } -- TODO Map this over parts
+  let sp = runExcept (read result.response)
+  case sp of
+    Left e ->
+      liftEff $ log "Start parameters could not be parsed"
+    Right params ->
+      put params
+  {-- s3Data <- parTraverse getS3Data parts --}
   pure unit
 
 type Effects = ( ajax :: AJAX, console :: CONSOLE , dom :: DOM , buffer :: BUFFER , crypto :: CRYPTO)
 main :: Partial => Blob -> Foreign -> Env (Eff Effects) Unit
-main file cfg = lift $ launchAff_ $ runRWST (upload file) cfg' $ State{ sParams: Nothing }
-  where cfg' = fromRight $ runExcept (genericDecode decodeOpts cfg)
+main file cfg = lift $ launchAff_ $ runRWST (upload file) cfg' state
+  where cfg' = fromRight $ runExcept (read cfg)
+        state = initialParams

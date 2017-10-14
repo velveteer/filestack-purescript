@@ -15,9 +15,6 @@
         console.log('loading');
         filestack.main()(e.files[0])(config)()()();
       }
-      var debug = {hello: "world"};
-      var blob = new Blob([JSON.stringify(debug, null, 2)], {type : 'application/json'}); 
-      filestack.main()(blob)(config)()()();
     </script>
   </body>
 </html>
