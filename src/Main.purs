@@ -27,8 +27,8 @@ import Data.Bifunctor (rmap)
 import Data.Either (either, Either(..), fromRight)
 import Data.Foreign (F, Foreign, unsafeReadTagged, readString)
 import Data.Foreign.NullOrUndefined (NullOrUndefined)
-import Data.Int (toNumber, round, toStringAs, decimal)
-import Data.Maybe (fromMaybe)
+import Data.Int (toNumber, ceil, round, toStringAs, decimal)
+import Data.Maybe (Maybe(..), fromMaybe, isJust)
 import Data.MediaType.Common (applicationOctetStream)
 import Data.MediaType (MediaType)
 import Data.Newtype (class Newtype, unwrap)
@@ -146,36 +146,38 @@ initialParams = Params
 getFileType :: Blob -> MediaType
 getFileType = fromMaybe applicationOctetStream <<< type_
 
-mkPart :: Blob -> Number -> Int -> Aff Effects Part
+mkPart :: Blob -> Number -> Int -> Aff Effects (Maybe Part)
 mkPart file ps p = do
   let slice' = slice (getFileType file) (StartByte startByte) (EndByte endByte)
       p' = toNumber p
       total = size file
       startByte = idxFromNumber $ p' * ps
       endByte = idxFromNumber $ min (p' * ps + ps) total
-  text <- readAsText $ slice' file
-  md5 <- liftEff $ base64 MD5 text
-  pure $ Part{ num: p, slice: slice' file, md5: md5 }
+      blob = slice' file
+  case (round $ size blob) > 0 of
+    false -> pure Nothing
+    true -> do
+      text <- readAsText blob
+      md5 <- liftEff $ base64 MD5 text
+      pure $ Just $ Part{ num: p, slice: slice' file, md5: md5 }
 
-getCommonFormData :: Env (Aff Effects) (Array (Tuple String FormDataValue))
+getCommonFormData :: Env (Aff Effects) (Array (Tuple String String))
 getCommonFormData = do
   Config cfg <- ask
   Params sp <- get
   let so = unwrap (cfg ^. storeTo)
-  pure $ rmap FormDataString <$> (
-    [ Tuple "region" sp.region
-    , Tuple "upload_id" sp.upload_id
-    , Tuple "uri" sp.uri
-    , Tuple "location_url" sp.location_url
-    , Tuple "store_location" so.location
-    , Tuple "apikey" $ cfg ^. apikey
-    ] # filter (\(Tuple k v) -> null v == false)
-  )
+  pure $ [ Tuple "region" sp.region
+         , Tuple "upload_id" sp.upload_id
+         , Tuple "uri" sp.uri
+         , Tuple "location_url" sp.location_url
+         , Tuple "store_location" so.location
+         , Tuple "apikey" $ cfg ^. apikey
+         ] # filter (\(Tuple k v) -> null v == false)
 
 mkFormData :: Array (Tuple String String) -> Env (Aff Effects) FormData
 mkFormData ts = do
   base <- getCommonFormData
-  pure $ toFormData $ (rmap FormDataString <$> ts) <> base
+  pure $ toFormData $ rmap FormDataString <$> ts <> base
 
 -- | Start the multipart upload flow
 start :: Blob -> Env (Aff Effects) (AffjaxResponse Foreign)
@@ -195,13 +197,11 @@ start file = do
 
 getS3Data :: Part -> Env (Aff Effects) (AffjaxResponse Foreign)
 getS3Data part = do
-  formdata <- getCommonFormData
-  let fields = (rmap FormDataString <$>
-               [ Tuple "size" $ show <<< round <<< size $ part ^. partSlice
-               , Tuple "md5" $ part ^. partMD5
-               , Tuple "part" $ toStringAs decimal $ (part ^. partNum) + 1
-               ]) <> formdata
-      fd = toFormData fields
+  let fields = [ Tuple "size" (show <<< round <<< size $ part ^. partSlice)
+               , Tuple "md5" (part ^. partMD5)
+               , Tuple "part" (toStringAs decimal $ (part ^. partNum) + 1)
+               ]
+  fd <- mkFormData fields
   lift $ post "https://upload.filestackapi.com/multipart/upload" fd
 
 upload :: Blob -> Env (Aff Effects) Unit
@@ -210,21 +210,23 @@ upload file = do
   lift $ liftEff $ log $ show cfg
   let total = size file
       ps = toNumber $ (unwrap cfg) ^. partSize
-      numParts = round $ total / ps
+      numParts = ceil $ total / ps
   parts <- lift $ parTraverse (mkPart file ps) $ range 0 numParts
-  traceAnyA parts
-  result <- start file
-  let sp = runExcept (read result.response)
-  case sp of
-    Left e ->
-      liftEff $ log "Start parameters could not be parsed"
-    Right params ->
-      put params
+  let validParts = parts # filter isJust
+  traceAnyA validParts
+  {-- result <- start file --}
+  {-- let sp = runExcept (read result.response) --}
+  {-- case sp of --}
+  {--   Left e -> --}
+  {--     liftEff $ log "Start parameters could not be parsed" --}
+  {--   Right params -> --}
+  {--     put params --}
   {-- s3Data <- parTraverse getS3Data parts --}
   pure unit
 
 type Effects = ( ajax :: AJAX, console :: CONSOLE , dom :: DOM , buffer :: BUFFER , crypto :: CRYPTO)
 main :: Partial => Blob -> Foreign -> Env (Eff Effects) Unit
-main file cfg = lift $ launchAff_ $ runRWST (upload file) cfg' state
-  where cfg' = fromRight $ runExcept (read cfg)
+main file cfg = lift $ launchAff_ $ runRWST app cfg' state
+  where app = upload file
+        cfg' = fromRight $ runExcept (read cfg)
         state = initialParams
