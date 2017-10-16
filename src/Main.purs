@@ -21,35 +21,34 @@ import DOM.File.FileReader as FileReader
 import DOM.HTML.Event.EventTypes as EventTypes
 import DOM.XHR.FormData (toFormData, FormDataValue(..))
 import DOM.XHR.Types (FormData)
+import Data.Array as A
 import Data.ArrayBuffer.ArrayBuffer (byteLength)
 import Data.ArrayBuffer.Types (ArrayBuffer)
 import Data.ArrayBuffer.DataView (whole)
 import Data.ArrayBuffer.Typed (asUint8Array)
 import Data.Bifunctor (rmap)
-import Data.Either (either, Either(..), fromRight, hush)
-import Data.Foreign (F, Foreign, unsafeReadTagged, readString, toForeign, unsafeFromForeign)
-import Data.Foreign.Index (class Indexable, index, ix)
+import Data.Either (either, Either(..), fromRight)
+import Data.Foreign (F, Foreign, unsafeReadTagged, unsafeFromForeign)
+import Data.Foreign.Index (ix)
 import Data.Foreign.Keys (keys)
 import Data.Foreign.NullOrUndefined (NullOrUndefined, unNullOrUndefined)
 import Data.Function.Uncurried (Fn1, runFn1)
 import Data.HTTP.Method (Method(..))
 import Data.Int (toNumber, ceil, round, toStringAs, decimal)
-import Data.List (List, filter, range, fromFoldable, length)
-import Data.Maybe (Maybe(..), fromMaybe, isJust)
+import Data.List (List, filter, range, fromFoldable)
+import Data.Maybe (Maybe(..), fromMaybe)
 import Data.MediaType.Common (applicationOctetStream)
 import Data.MediaType (MediaType)
 import Data.Newtype (class Newtype, unwrap)
 import Data.String (null, joinWith)
-import Data.Tuple (Tuple(..), uncurry)
+import Data.Tuple (Tuple(..), uncurry, fst, snd)
 import Network.HTTP.Affjax (AJAX, AffjaxResponse, affjax, post, defaultRequest, retry, defaultRetryPolicy)
 import Network.HTTP.RequestHeader (RequestHeader(..))
-import Node.Buffer (BUFFER)
-import Node.Crypto (CRYPTO)
-import Node.Crypto.Hash (base64, Algorithm(..))
+import Network.HTTP.ResponseHeader (responseHeaderName, responseHeaderValue)
 import Optic.Getter ((^.))
 import Optic.Lens (lens)
 import Optic.Types (Lens, Lens')
-import Pipes ((>->), (>~), (~>), await, each, for, yield)
+import Pipes ((>->), await, each, yield)
 import Pipes.Core (Pipe, runEffect)
 import Pipes.Prelude as P
 import Simple.JSON (class ReadForeign, read, readJSON')
@@ -237,7 +236,7 @@ makeS3Headers ps = (\n -> RequestHeader n $ convert (runExcept $ ix ps n)) <$> k
   where ks = either (const []) (\a -> a) (runExcept $ keys ps)
         convert = either (const "") (\v -> unsafeFromForeign v :: String)
 
-uploadToS3 :: String -> Part -> Aff Effects (Fiber Effects (AffjaxResponse Foreign))
+uploadToS3 :: String -> Part -> Aff Effects (Tuple Part (AffjaxResponse String))
 uploadToS3 s3p part = do
   let s3 = runExcept (readJSON' s3p :: F S3Params)
   case s3 of
@@ -246,12 +245,14 @@ uploadToS3 s3p part = do
     Right (S3Params params) -> do
       let hs = makeS3Headers params.headers
           bytes = part ^. partSlice
-      forkAff $ retry defaultRetryPolicy affjax $ defaultRequest
+
+      res <- retry defaultRetryPolicy affjax $ defaultRequest
         { url = params.url
         , headers = hs
         , method = Left PUT
         , content = Just (asUint8Array $ whole bytes)
         }
+      pure $ Tuple part res
 
 upload :: Partial => Blob -> Env (Aff Effects) Unit
 upload file = do
@@ -276,17 +277,30 @@ upload file = do
     >-> P.mapM forkAff
     >-> P.mapM joinFiber
     >-> P.mapM (getS3Data fields)
-    >-> P.mapM (uncurry uploadToS3)
+    >-> P.map (uncurry uploadToS3)
+    >-> register
     >-> P.drain
   pure unit
+
+register :: Pipe (Aff Effects (Tuple Part (AffjaxResponse String))) Foreign (Aff Effects) Unit
+register = do
+  t <- await
+  fiber <- lift $ forkAff t
+  pair <- lift $ joinFiber fiber
+  let part = fst pair
+      req = snd pair
+  traceAnyA part
+  traceAnyA req
+  {-- fiber' <- lift $ forkAff req --}
+  {-- res <- lift $ joinFiber fiber' --}
+  {-- let etagHeader = res.headers # A.filter (\s -> responseHeaderName s == "etag") --}
+  {-- traceAnyA $ (responseHeaderValue <$> etagHeader) # joinWith "" --}
 
 type Effects =
   ( ajax :: AJAX
   , console :: CONSOLE
   , dom :: DOM
   , exception :: EXCEPTION
-  , buffer :: BUFFER
-  , crypto :: CRYPTO
   , ref :: REF
   )
 main :: Partial => Blob -> Foreign -> Env (Eff Effects) Unit
