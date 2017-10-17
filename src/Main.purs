@@ -1,15 +1,17 @@
 module Main where
 
 import Prelude
-import Control.Monad.Aff (attempt, forkAff, joinFiber, launchAff_, makeAff, Aff, Fiber, nonCanceler)
+import Control.Monad.Aff (attempt, forkAff, joinFiber, launchAff_, makeAff, Aff, nonCanceler)
+import Control.Monad.Aff.AVar (AVAR)
 import Control.Monad.Eff (Eff)
 import Control.Monad.Eff.Class (liftEff)
 import Control.Monad.Eff.Console (CONSOLE, log)
-import Control.Monad.Eff.Exception (EXCEPTION, Error, error, throw)
+import Control.Monad.Eff.Exception (EXCEPTION, error, throw)
 import Control.Monad.Eff.Ref (REF)
 import Control.Monad.Except (runExcept)
 import Control.Monad.Reader (ask)
-import Control.Monad.State (get, put)
+import Control.Monad.Rec.Class (forever)
+import Control.Monad.State (get, put, modify)
 import Control.Monad.RWS.Trans (RWST, runRWST)
 import Control.Monad.Trans.Class (lift)
 import DOM (DOM)
@@ -22,7 +24,6 @@ import DOM.HTML.Event.EventTypes as EventTypes
 import DOM.XHR.FormData (toFormData, FormDataValue(..))
 import DOM.XHR.Types (FormData)
 import Data.Array as A
-import Data.ArrayBuffer.ArrayBuffer (byteLength)
 import Data.ArrayBuffer.Types (ArrayBuffer)
 import Data.ArrayBuffer.DataView (whole)
 import Data.ArrayBuffer.Typed (asUint8Array)
@@ -35,27 +36,29 @@ import Data.Foreign.NullOrUndefined (NullOrUndefined, unNullOrUndefined)
 import Data.Function.Uncurried (Fn1, runFn1)
 import Data.HTTP.Method (Method(..))
 import Data.Int (toNumber, ceil, round, toStringAs, decimal)
-import Data.List (List, filter, range, fromFoldable)
+import Data.List (List, filter, fromFoldable, range)
 import Data.Maybe (Maybe(..), fromMaybe)
 import Data.MediaType.Common (applicationOctetStream)
 import Data.MediaType (MediaType)
 import Data.Newtype (class Newtype, unwrap)
 import Data.String (null, joinWith)
-import Data.Tuple (Tuple(..), uncurry, fst, snd)
+import Data.Tuple (Tuple(..))
 import Network.HTTP.Affjax (AJAX, AffjaxResponse, affjax, post, defaultRequest, retry, defaultRetryPolicy)
 import Network.HTTP.RequestHeader (RequestHeader(..))
 import Network.HTTP.ResponseHeader (responseHeaderName, responseHeaderValue)
 import Optic.Getter ((^.))
 import Optic.Lens (lens)
 import Optic.Types (Lens, Lens')
-import Pipes ((>->), await, each, yield)
-import Pipes.Core (Pipe, runEffect)
+import Pipes ((>->), await, each, for, yield)
+import Pipes.Core (Consumer, Pipe, Producer, runEffect)
 import Pipes.Prelude as P
+import Pipes.Aff (spawn, unbounded, toOutput, fromInput)
+
 import Simple.JSON (class ReadForeign, read, readJSON')
 import Debug.Trace (traceAnyA)
 
-foreign import sparkMD5Impl :: Fn1 ArrayBuffer String
-sparkMD5 :: ArrayBuffer -> String
+foreign import sparkMD5Impl :: forall e. Fn1 ArrayBuffer (Eff e String)
+sparkMD5 :: forall e. ArrayBuffer -> Eff e String
 sparkMD5 ab = runFn1 sparkMD5Impl ab
 --
 -- File API helpers
@@ -110,7 +113,7 @@ instance showSO :: Show StoreOptions where
                            ] # joinWith "\n"
 
 type Log = List String
-type Env = RWST Config Log Params
+type Env = RWST Config Log State
 
 apikey :: forall a b r. Lens { apikey :: a | r } { apikey :: b | r } a b
 apikey = lens _.apikey (_ { apikey = _ })
@@ -126,10 +129,10 @@ location = lens _.location (_ { location = _ })
 --
 newtype Part = Part
   { num :: Int
-  , slice :: ArrayBuffer
+  , slice :: Blob
   , md5 :: String
   }
-partSlice :: Lens' Part ArrayBuffer
+partSlice :: Lens' Part Blob
 partSlice  = lens (\(Part x) -> x.slice) (\(Part x) v -> Part x { slice = v })
 partNum :: Lens' Part Int
 partNum  = lens (\(Part x) -> x.num) (\(Part x) v -> Part x { num = v })
@@ -151,6 +154,8 @@ newtype Params = Params
 derive instance ntSP :: Newtype Params _
 derive newtype instance rfP :: ReadForeign Params
 
+type State = { params :: Params, file :: Blob }
+
 initialParams :: Params
 initialParams = Params
   { location_url: ""
@@ -162,18 +167,34 @@ initialParams = Params
 getFileType :: Blob -> MediaType
 getFileType = fromMaybe applicationOctetStream <<< type_
 
-mkPart :: Blob -> Number -> Int -> Aff Effects Part
-mkPart file ps p = do
-  let slice' = slice (getFileType file) (StartByte startByte) (EndByte endByte)
-      p' = toNumber p
-      total = size file
-      startByte = idxFromNumber $ p' * ps
-      endByte = idxFromNumber $ min (p' * ps + ps) total
-      blob = slice' file
-  liftEff $ log $ "Slicing part " <> show p
-  buf <- readAsArrayBuffer blob
-  let md5 = runFn1 sparkMD5 buf
-  pure $ Part{ num: p, slice: buf, md5: md5 }
+parts :: Producer Part (Env (Aff Effects)) Unit
+parts = go 0 where
+  go n = do
+    Config cfg <- ask
+    state <- lift get
+    let ps = toNumber $ cfg ^. partSize
+        total = size state.file
+        mediatype = getFileType state.file
+        numParts = ceil $ total / ps
+        slice' = slice mediatype (StartByte startByte) (EndByte endByte)
+        num = toNumber n
+        startByte = idxFromNumber $ num * ps
+        endByte = idxFromNumber $ min (num * ps + ps) total
+        blob = slice' state.file
+    unless (n == numParts) do
+      lift $ liftEff $ log $
+        "Slicing part " <> show (n + 1)
+                        <> " of "
+                        <> show numParts
+                        <> " with size: "
+                        <> show (round $ size blob)
+      buf <- lift $ lift $ readAsArrayBuffer blob
+      md5 <- lift $ liftEff $ runFn1 sparkMD5 buf
+      yield $ Part { num: n
+                   , slice: blob
+                   , md5: md5
+                   }
+    go (n + 1)
 
 -- Type for key/value pairs that we will convert to FormData
 type Fields = List (Tuple String String)
@@ -181,8 +202,9 @@ type Fields = List (Tuple String String)
 getCommonFields :: Env (Aff Effects) Fields
 getCommonFields = do
   Config cfg <- ask
-  Params sp <- get
+  state <- get
   let so = unwrap (cfg ^. storeTo)
+      sp = unwrap (state.params)
   pure $ fromFoldable [ Tuple "region" sp.region
                       , Tuple "upload_id" sp.upload_id
                       , Tuple "uri" sp.uri
@@ -202,26 +224,28 @@ mkFormData ts = toFormData $ rmap FormDataString <$> ts
 start :: Blob -> Env (Aff Effects) (AffjaxResponse String)
 start file = do
   let fs = fromFoldable [ Tuple "mimetype" (show <<< unwrap $ getFileType file)
-                        , Tuple "filename" "testfile" -- TODO getFilename
+                        , Tuple "filename" "testfile.gif" -- TODO getFilename
                         , Tuple "size" (show <<< round $ size file)
                         ]
   common <- getCommonFields
   lift $ post "https://upload.filestackapi.com/multipart/start" (mkFormData $ common <> fs)
 
-getS3Data :: Fields -> Part -> Aff Effects (Tuple String Part)
-getS3Data form part = do
-  let fields = form <> fromFoldable [ Tuple "size" (show <<< byteLength $ part ^. partSlice)
-                                    , Tuple "md5" (part ^. partMD5)
-                                    , Tuple "part" (toStringAs decimal $ (part ^. partNum) + 1)
-                                    ]
-  res <- attempt $ retry defaultRetryPolicy affjax $ defaultRequest
+getS3Data :: Pipe Part (Tuple Part String) (Env (Aff Effects)) Unit
+getS3Data = forever $ do
+  part <- await
+  let fields = fromFoldable [ Tuple "size" (show <<< round <<< size $ part ^. partSlice)
+                            , Tuple "md5" (part ^. partMD5)
+                            , Tuple "part" (toStringAs decimal $ (part ^. partNum) + 1)
+                            ]
+  common <- lift getCommonFields
+  res <- lift $ lift $ attempt $ retry defaultRetryPolicy affjax $ defaultRequest
     { url = "https://upload.filestackapi.com/multipart/upload"
     , method = Left POST
-    , content = Just (mkFormData fields)
+    , content = Just (mkFormData $ common <> fields)
     }
   case res of
-    Left e -> liftEff $ throw "Failed to retrieve S3 metadata"
-    Right r -> pure $ Tuple r.response part
+    Left e -> lift $ liftEff $ throw "Failed to retrieve S3 metadata"
+    Right r -> yield $ Tuple part r.response
 
 newtype S3Params = S3Params
   { url :: String
@@ -236,68 +260,88 @@ makeS3Headers ps = (\n -> RequestHeader n $ convert (runExcept $ ix ps n)) <$> k
   where ks = either (const []) (\a -> a) (runExcept $ keys ps)
         convert = either (const "") (\v -> unsafeFromForeign v :: String)
 
-uploadToS3 :: String -> Part -> Aff Effects (Tuple Part (AffjaxResponse String))
-uploadToS3 s3p part = do
+uploadToS3 :: Pipe (Tuple Part String) (Tuple Part (Aff Effects (AffjaxResponse String))) (Env (Aff Effects)) Unit
+uploadToS3 = forever $ do
+  (Tuple part s3p) <- await
   let s3 = runExcept (readJSON' s3p :: F S3Params)
   case s3 of
     Left e ->
-      liftEff $ throw $ show e
+      lift $ liftEff $ throw $ show e
     Right (S3Params params) -> do
+      bytes <- lift $ lift $ readAsArrayBuffer (part ^. partSlice)
       let hs = makeS3Headers params.headers
-          bytes = part ^. partSlice
+          aff = retry defaultRetryPolicy affjax $ defaultRequest
+            { url = params.url
+            , headers = hs
+            , method = Left PUT
+            , content = Just (asUint8Array $ whole bytes)
+            }
+      yield $ Tuple part aff
 
-      res <- retry defaultRetryPolicy affjax $ defaultRequest
-        { url = params.url
-        , headers = hs
-        , method = Left PUT
-        , content = Just (asUint8Array $ whole bytes)
-        }
-      pure $ Tuple part res
+mkPartStr :: Part -> String -> String
+mkPartStr (Part p) e = show (p.num + 1) <> ":" <> e
 
-upload :: Partial => Blob -> Env (Aff Effects) Unit
+etags :: Int -> Pipe (Tuple Part String) (Array String) (Env (Aff Effects)) Unit
+etags total = loop [] total
+  where loop acc 0 = yield acc
+        loop acc n = do
+           (Tuple part etag) <- await
+           loop (acc <> [mkPartStr part etag]) (n - 1)
+
+complete :: Consumer (Array String) (Env (Aff Effects)) Unit
+complete = do
+  tags <- await
+  state <- lift get
+  let fields = fromFoldable [ Tuple "mimetype" (show <<< unwrap $ getFileType state.file)
+                            , Tuple "filename" "testfile.gif" -- TODO getFilename
+                            , Tuple "size" (show <<< round $ size $ state.file)
+                            , Tuple "parts" $ tags # joinWith ";"
+                            ]
+  common <- lift getCommonFields
+  res <- lift $ lift $ attempt $ retry defaultRetryPolicy affjax $ defaultRequest
+    { url = "https://upload.filestackapi.com/multipart/complete"
+    , method = Left POST
+    , content = Just (mkFormData $ common <> fields)
+    }
+  case res of
+    Left e -> lift $ liftEff $ throw "Failed to complete S3 upload"
+    Right r -> pure r.response
+
+upload :: Blob -> Env (Aff Effects) Unit
 upload file = do
-  cfg <- ask
-  lift $ liftEff $ log $ show cfg
-  let total = size file
-      ps = toNumber $ (unwrap cfg) ^. partSize
-      numParts = ceil $ total / ps
-      partAffs = mkPart file ps <$> range 0 (numParts - 1)
-
+  Config cfg <- ask
+  lift $ liftEff $ log $ show (Config cfg)
   -- Call /multipart/start and store returned params in State monad
   result <- start file
   let sp = runExcept (readJSON' result.response)
+      total = ceil $ (size file) / (toNumber (cfg ^. partSize))
   case sp of
     Left e ->
       lift $ liftEff $ throw "Start parameters could not be parsed"
     Right params ->
-      put params
-  fields <- getCommonFields
-  traceAnyA partAffs
-  lift $ runEffect $ each partAffs
-    >-> P.mapM forkAff
-    >-> P.mapM joinFiber
-    >-> P.mapM (getS3Data fields)
-    >-> P.map (uncurry uploadToS3)
-    >-> register
-    >-> P.drain
+      modify (\s -> s{ params = params})
+  {-- s3Channel <- lift $ spawn unbounded --}
+  runEffect $ parts
+            >-> getS3Data
+            >-> uploadToS3
+            >-> s3Scheduler
+            >-> etags total
+            >-> complete
   pure unit
 
-register :: Pipe (Aff Effects (Tuple Part (AffjaxResponse String))) Foreign (Aff Effects) Unit
-register = do
-  t <- await
-  fiber <- lift $ forkAff t
-  pair <- lift $ joinFiber fiber
-  let part = fst pair
-      req = snd pair
-  traceAnyA part
-  traceAnyA req
-  {-- fiber' <- lift $ forkAff req --}
-  {-- res <- lift $ joinFiber fiber' --}
-  {-- let etagHeader = res.headers # A.filter (\s -> responseHeaderName s == "etag") --}
-  {-- traceAnyA $ (responseHeaderValue <$> etagHeader) # joinWith "" --}
+s3Scheduler :: Pipe (Tuple Part (Aff Effects (AffjaxResponse String))) (Tuple Part String) (Env (Aff Effects)) Unit
+s3Scheduler = forever $ do
+  (Tuple part aff) <- await
+  -- TODO Don't fork if we hit concurrency limit
+  fiber <- lift $ lift $ forkAff aff
+  res <- lift $ lift $ joinFiber fiber
+  let etagHeader = res.headers # A.filter (\s -> responseHeaderName s == "etag")
+      etag = (responseHeaderValue <$> etagHeader) # joinWith ""
+  yield $ Tuple part etag
 
 type Effects =
   ( ajax :: AJAX
+  , avar :: AVAR
   , console :: CONSOLE
   , dom :: DOM
   , exception :: EXCEPTION
@@ -307,4 +351,4 @@ main :: Partial => Blob -> Foreign -> Env (Eff Effects) Unit
 main file cfg = lift $ launchAff_ $ runRWST app cfg' state
   where app = upload file
         cfg' = fromRight $ runExcept (read cfg)
-        state = initialParams
+        state = { params: initialParams, file: file }
