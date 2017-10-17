@@ -11,7 +11,7 @@ import Control.Monad.Eff.Ref (REF)
 import Control.Monad.Except (runExcept)
 import Control.Monad.Reader (ask)
 import Control.Monad.Rec.Class (forever)
-import Control.Monad.State (get, put, modify)
+import Control.Monad.State (get, modify)
 import Control.Monad.RWS.Trans (RWST, runRWST)
 import Control.Monad.Trans.Class (lift)
 import DOM (DOM)
@@ -36,7 +36,7 @@ import Data.Foreign.NullOrUndefined (NullOrUndefined, unNullOrUndefined)
 import Data.Function.Uncurried (Fn1, runFn1)
 import Data.HTTP.Method (Method(..))
 import Data.Int (toNumber, ceil, round, toStringAs, decimal)
-import Data.List (List, filter, fromFoldable, range)
+import Data.List (List, filter, fromFoldable)
 import Data.Maybe (Maybe(..), fromMaybe)
 import Data.MediaType.Common (applicationOctetStream)
 import Data.MediaType (MediaType)
@@ -281,31 +281,28 @@ uploadToS3 = forever $ do
 mkPartStr :: Part -> String -> String
 mkPartStr (Part p) e = show (p.num + 1) <> ":" <> e
 
-etags :: Int -> Pipe (Tuple Part String) (Array String) (Env (Aff Effects)) Unit
-etags total = loop [] total
-  where loop acc 0 = yield acc
-        loop acc n = do
-           (Tuple part etag) <- await
-           loop (acc <> [mkPartStr part etag]) (n - 1)
-
-complete :: Consumer (Array String) (Env (Aff Effects)) Unit
-complete = do
-  tags <- await
-  state <- lift get
-  let fields = fromFoldable [ Tuple "mimetype" (show <<< unwrap $ getFileType state.file)
-                            , Tuple "filename" "testfile.gif" -- TODO getFilename
-                            , Tuple "size" (show <<< round $ size $ state.file)
-                            , Tuple "parts" $ tags # joinWith ";"
-                            ]
-  common <- lift getCommonFields
-  res <- lift $ lift $ attempt $ retry defaultRetryPolicy affjax $ defaultRequest
-    { url = "https://upload.filestackapi.com/multipart/complete"
-    , method = Left POST
-    , content = Just (mkFormData $ common <> fields)
-    }
-  case res of
-    Left e -> lift $ liftEff $ throw "Failed to complete S3 upload"
-    Right r -> pure r.response
+complete :: Int -> Consumer (Tuple Part String) (Env (Aff Effects)) Unit
+complete total = go [] total
+  where
+    go tags n | n /= 0 = do
+      (Tuple part etag) <- await
+      go (tags <> [mkPartStr part etag]) (n - 1)
+    go tags n = do
+      state <- lift get
+      let fields = fromFoldable [ Tuple "mimetype" (show <<< unwrap $ getFileType state.file)
+                                , Tuple "filename" "testfile.gif" -- TODO getFilename
+                                , Tuple "size" (show <<< round $ size $ state.file)
+                                , Tuple "parts" $ tags # joinWith ";"
+                                ]
+      common <- lift getCommonFields
+      res <- lift $ lift $ attempt $ retry defaultRetryPolicy affjax $ defaultRequest
+        { url = "https://upload.filestackapi.com/multipart/complete"
+        , method = Left POST
+        , content = Just (mkFormData $ common <> fields)
+        }
+      case res of
+        Left e -> lift $ liftEff $ throw "Failed to complete S3 upload"
+        Right r -> pure r.response
 
 upload :: Blob -> Env (Aff Effects) Unit
 upload file = do
@@ -319,14 +316,12 @@ upload file = do
     Left e ->
       lift $ liftEff $ throw "Start parameters could not be parsed"
     Right params ->
-      modify (\s -> s{ params = params})
+      modify (\s -> s{ params = params })
   {-- s3Channel <- lift $ spawn unbounded --}
-  runEffect $ parts
-            >-> getS3Data
-            >-> uploadToS3
-            >-> s3Scheduler
-            >-> etags total
-            >-> complete
+  runEffect $ parts >-> getS3Data
+                    >-> uploadToS3
+                    >-> s3Scheduler
+                    >-> complete total
   pure unit
 
 s3Scheduler :: Pipe (Tuple Part (Aff Effects (AffjaxResponse String))) (Tuple Part String) (Env (Aff Effects)) Unit
