@@ -26,6 +26,7 @@ import Data.ArrayBuffer.DataView (whole)
 import Data.ArrayBuffer.Typed (asUint8Array)
 import Data.Bifunctor (rmap)
 import Data.Either (either, Either(..), fromRight)
+import Data.Foldable (for_)
 import Data.Foreign (F, Foreign, unsafeReadTagged, unsafeFromForeign)
 import Data.Foreign.Index (ix)
 import Data.Foreign.Keys (keys)
@@ -39,7 +40,6 @@ import Data.MediaType.Common (applicationOctetStream)
 import Data.MediaType (MediaType)
 import Data.Newtype (class Newtype, unwrap)
 import Data.String (null, joinWith)
-import Data.Traversable (for)
 import Data.Tuple (Tuple(..))
 import Network.HTTP.Affjax (AJAX, AffjaxResponse, affjax, post, defaultRequest, retry, defaultRetryPolicy)
 import Network.HTTP.RequestHeader (RequestHeader(..))
@@ -151,7 +151,12 @@ newtype Params = Params
 derive instance ntSP :: Newtype Params _
 derive newtype instance rfP :: ReadForeign Params
 
-type State = { params :: Params, file :: Blob, cfg :: Config }
+type State =
+  { params :: Params
+  , file :: Blob
+  , name :: String
+  , cfg :: Config
+  }
 
 initialParams :: Params
 initialParams = Params
@@ -215,7 +220,7 @@ mkFormData ts = toFormData $ rmap FormDataString <$> ts
 start :: State -> Blob -> Aff Effects (AffjaxResponse String)
 start state file = do
   let fs = fromFoldable [ Tuple "mimetype" (show <<< unwrap $ getFileType file)
-                        , Tuple "filename" "testfile.gif" -- TODO getFilename
+                        , Tuple "filename" state.name
                         , Tuple "size" (show <<< round $ size file)
                         ]
   common <- getCommonFields state
@@ -280,7 +285,7 @@ complete state total = go [] total
       go (tags <> [mkPartStr num etag]) (n - 1)
     go tags n = do
       let fields = fromFoldable [ Tuple "mimetype" (show <<< unwrap $ getFileType state.file)
-                                , Tuple "filename" "testfile.gif" -- TODO getFilename
+                                , Tuple "filename" state.name
                                 , Tuple "size" (show <<< round $ size $ state.file)
                                 , Tuple "parts" $ tags # joinWith ";"
                                 ]
@@ -306,7 +311,7 @@ upload file ctx = do
       let context = ctx{ params = params :: Params }
       s3Channel <- spawn unbounded
       -- TODO Do this better somehow
-      _ <- for (range 0 (total - 1)) \x -> do
+      for_ (range 0 (total - 1)) \x -> do
         forkAff $ runEffect $ mkPart context x
           >-> getS3Data
           >-> getS3Req
@@ -333,7 +338,7 @@ type Effects =
   , exception :: EXCEPTION
   , ref :: REF
   )
-main :: Partial => Blob -> Foreign -> Eff Effects Unit
-main file cfg = launchAff_ $ upload file init
-  where init = { params: initialParams, file: file, cfg: cfg' }
+main :: Partial => Blob -> String -> Foreign -> Eff Effects Unit
+main file name cfg = launchAff_ $ upload file init
+  where init = { params: initialParams, file: file, name: name, cfg: cfg' }
         cfg' = fromRight $ runExcept (read cfg)
