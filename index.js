@@ -27515,6 +27515,7 @@ var Control_Applicative = require("../Control.Applicative");
 var Control_Bind = require("../Control.Bind");
 var Control_Monad_Aff = require("../Control.Monad.Aff");
 var Control_Monad_Aff_AVar = require("../Control.Monad.Aff.AVar");
+var Control_Monad_Aff_Class = require("../Control.Monad.Aff.Class");
 var Control_Monad_Eff = require("../Control.Monad.Eff");
 var Control_Monad_Eff_Class = require("../Control.Monad.Eff.Class");
 var Control_Monad_Eff_Console = require("../Control.Monad.Eff.Console");
@@ -27570,6 +27571,7 @@ var Data_Semiring = require("../Data.Semiring");
 var Data_Show = require("../Data.Show");
 var Data_String = require("../Data.String");
 var Data_Symbol = require("../Data.Symbol");
+var Data_Traversable = require("../Data.Traversable");
 var Data_Tuple = require("../Data.Tuple");
 var Data_Unit = require("../Data.Unit");
 var Debug_Trace = require("../Debug.Trace");
@@ -27621,14 +27623,14 @@ var storeTo = function (dictFunctor) {
         return v.storeTo;
     })(function (v) {
         return function (v1) {
-            var $71 = {};
-            for (var $72 in v) {
-                if ({}.hasOwnProperty.call(v, $72)) {
-                    $71[$72] = v[$72];
+            var $74 = {};
+            for (var $75 in v) {
+                if ({}.hasOwnProperty.call(v, $75)) {
+                    $74[$75] = v[$75];
                 };
             };
-            $71.storeTo = v1;
-            return $71;
+            $74.storeTo = v1;
+            return $74;
         };
     })(dictFunctor);
 };
@@ -27644,17 +27646,6 @@ var showPart = new Data_Show.Show(function (v) {
 var showC = new Data_Show.Show(function (v) {
     return Data_String.joinWith("\x0a")([ "apikey: " + v.apikey, "partSize: " + Data_Show.show(Data_Show.showInt)(v.partSize), Data_Show.show(showSO)(v.storeTo) ]);
 });
-var s3Scheduler = Control_Monad_Rec_Class.forever(Pipes_Internal.monadRecProxy(Control_Monad_RWS_Trans.monadRWST(Control_Monad_Aff.monadAff)(Data_List_Types.monoidList)))(Control_Bind.bind(Pipes_Internal.bindProxy(Control_Monad_RWS_Trans.monadRWST(Control_Monad_Aff.monadAff)(Data_List_Types.monoidList)))(Pipes["await"](Control_Monad_RWS_Trans.monadRWST(Control_Monad_Aff.monadAff)(Data_List_Types.monoidList)))(function (v) {
-    return Control_Bind.bind(Pipes_Internal.bindProxy(Control_Monad_RWS_Trans.monadRWST(Control_Monad_Aff.monadAff)(Data_List_Types.monoidList)))(Control_Monad_Trans_Class.lift(Pipes_Internal.monadTransProxy)(Control_Monad_RWS_Trans.monadRWST(Control_Monad_Aff.monadAff)(Data_List_Types.monoidList))(Control_Monad_Trans_Class.lift(Control_Monad_RWS_Trans.monadTransRWST(Data_List_Types.monoidList))(Control_Monad_Aff.monadAff)(Control_Monad_Aff.forkAff(v.value1))))(function (v1) {
-        return Control_Bind.bind(Pipes_Internal.bindProxy(Control_Monad_RWS_Trans.monadRWST(Control_Monad_Aff.monadAff)(Data_List_Types.monoidList)))(Control_Monad_Trans_Class.lift(Pipes_Internal.monadTransProxy)(Control_Monad_RWS_Trans.monadRWST(Control_Monad_Aff.monadAff)(Data_List_Types.monoidList))(Control_Monad_Trans_Class.lift(Control_Monad_RWS_Trans.monadTransRWST(Data_List_Types.monoidList))(Control_Monad_Aff.monadAff)(Control_Monad_Aff.joinFiber(v1))))(function (v2) {
-            var etagHeader = Data_Array.filter(function (s) {
-                return Network_HTTP_ResponseHeader.responseHeaderName(s) === "etag";
-            })(v2.headers);
-            var etag = Data_String.joinWith("")(Data_Functor.map(Data_Functor.functorArray)(Network_HTTP_ResponseHeader.responseHeaderValue)(etagHeader));
-            return Pipes["yield"](Control_Monad_RWS_Trans.monadRWST(Control_Monad_Aff.monadAff)(Data_List_Types.monoidList))(new Data_Tuple.Tuple(v.value0, etag));
-        });
-    });
-}));
 var rfSO = Simple_JSON.readRecord()(Simple_JSON.readFieldsCons(new Data_Symbol.IsSymbol(function () {
     return "access";
 }))(Simple_JSON.readNullOrUndefined(Simple_JSON.readString))(Simple_JSON.readFieldsCons(new Data_Symbol.IsSymbol(function () {
@@ -27710,8 +27701,8 @@ var readAs = function (readMethod) {
                             var v2 = DOM_File_FileReader.result(v)();
                             return Data_Either.either(function (errs) {
                                 return cb(Data_Either.Left.create(Control_Monad_Eff_Exception.error(Data_Show.show(Data_List_Types.showNonEmptyList(Data_Foreign.showForeignError))(errs))));
-                            })(function ($165) {
-                                return cb(Data_Either.Right.create($165));
+                            })(function ($171) {
+                                return cb(Data_Either.Right.create($171));
                             })(Control_Monad_Except.runExcept(readMethod(v2)))();
                         };
                     }))(false)(et)();
@@ -27727,14 +27718,14 @@ var partSlice = function (dictFunctor) {
         return v.slice;
     })(function (v) {
         return function (v1) {
-            var $86 = {};
-            for (var $87 in v) {
-                if ({}.hasOwnProperty.call(v, $87)) {
-                    $86[$87] = v[$87];
+            var $84 = {};
+            for (var $85 in v) {
+                if ({}.hasOwnProperty.call(v, $85)) {
+                    $84[$85] = v[$85];
                 };
             };
-            $86.slice = v1;
-            return $86;
+            $84.slice = v1;
+            return $84;
         };
     })(dictFunctor);
 };
@@ -27743,14 +27734,14 @@ var partSize = function (dictFunctor) {
         return v.partSize;
     })(function (v) {
         return function (v1) {
-            var $89 = {};
-            for (var $90 in v) {
-                if ({}.hasOwnProperty.call(v, $90)) {
-                    $89[$90] = v[$90];
+            var $87 = {};
+            for (var $88 in v) {
+                if ({}.hasOwnProperty.call(v, $88)) {
+                    $87[$88] = v[$88];
                 };
             };
-            $89.partSize = v1;
-            return $89;
+            $87.partSize = v1;
+            return $87;
         };
     })(dictFunctor);
 };
@@ -27759,30 +27750,59 @@ var partNum = function (dictFunctor) {
         return v.num;
     })(function (v) {
         return function (v1) {
-            var $94 = {};
-            for (var $95 in v) {
-                if ({}.hasOwnProperty.call(v, $95)) {
-                    $94[$95] = v[$95];
+            var $92 = {};
+            for (var $93 in v) {
+                if ({}.hasOwnProperty.call(v, $93)) {
+                    $92[$93] = v[$93];
                 };
             };
-            $94.num = v1;
-            return $94;
+            $92.num = v1;
+            return $92;
         };
     })(dictFunctor);
 };
+var s3Scheduler = Control_Monad_Rec_Class.forever(Pipes_Internal.monadRecProxy(Control_Monad_RWS_Trans.monadRWST(Control_Monad_Aff.monadAff)(Data_List_Types.monoidList)))(Control_Bind.bind(Pipes_Internal.bindProxy(Control_Monad_RWS_Trans.monadRWST(Control_Monad_Aff.monadAff)(Data_List_Types.monoidList)))(Pipes["await"](Control_Monad_RWS_Trans.monadRWST(Control_Monad_Aff.monadAff)(Data_List_Types.monoidList)))(function (v) {
+    return Control_Bind.bind(Pipes_Internal.bindProxy(Control_Monad_RWS_Trans.monadRWST(Control_Monad_Aff.monadAff)(Data_List_Types.monoidList)))(Control_Monad_Trans_Class.lift(Pipes_Internal.monadTransProxy)(Control_Monad_RWS_Trans.monadRWST(Control_Monad_Aff.monadAff)(Data_List_Types.monoidList))(Control_Monad_Trans_Class.lift(Control_Monad_RWS_Trans.monadTransRWST(Data_List_Types.monoidList))(Control_Monad_Aff.monadAff)(Control_Monad_Aff.forkAff(v.value1))))(function (v1) {
+        return Control_Bind.bind(Pipes_Internal.bindProxy(Control_Monad_RWS_Trans.monadRWST(Control_Monad_Aff.monadAff)(Data_List_Types.monoidList)))(Control_Monad_Trans_Class.lift(Pipes_Internal.monadTransProxy)(Control_Monad_RWS_Trans.monadRWST(Control_Monad_Aff.monadAff)(Data_List_Types.monoidList))(Control_Monad_Trans_Class.lift(Control_Monad_RWS_Trans.monadTransRWST(Data_List_Types.monoidList))(Control_Monad_Aff.monadAff)(Control_Monad_Aff.joinFiber(v1))))(function (v2) {
+            var etagHeader = Data_Array.filter(function (s) {
+                return Network_HTTP_ResponseHeader.responseHeaderName(s) === "etag";
+            })(v2.headers);
+            var etag = Data_String.joinWith("")(Data_Functor.map(Data_Functor.functorArray)(Network_HTTP_ResponseHeader.responseHeaderValue)(etagHeader));
+            return Control_Bind.discard(Control_Bind.discardUnit)(Pipes_Internal.bindProxy(Control_Monad_RWS_Trans.monadRWST(Control_Monad_Aff.monadAff)(Data_List_Types.monoidList)))(Debug_Trace.traceAnyA(Debug_Trace.warn())(Pipes_Internal.applicativeProxy(Control_Monad_RWS_Trans.monadRWST(Control_Monad_Aff.monadAff)(Data_List_Types.monoidList)))(v.value0))(function () {
+                return Pipes["yield"](Control_Monad_RWS_Trans.monadRWST(Control_Monad_Aff.monadAff)(Data_List_Types.monoidList))(new Data_Tuple.Tuple(Optic_Getter.weiv(v.value0)(partNum(Data_Const.functorConst)), etag));
+            });
+        });
+    });
+}));
 var partMD5 = function (dictFunctor) {
     return Optic_Lens.lens(function (v) {
         return v.md5;
     })(function (v) {
         return function (v1) {
-            var $99 = {};
-            for (var $100 in v) {
-                if ({}.hasOwnProperty.call(v, $100)) {
-                    $99[$100] = v[$100];
+            var $102 = {};
+            for (var $103 in v) {
+                if ({}.hasOwnProperty.call(v, $103)) {
+                    $102[$103] = v[$103];
                 };
             };
-            $99.md5 = v1;
-            return $99;
+            $102.md5 = v1;
+            return $102;
+        };
+    })(dictFunctor);
+};
+var partLength = function (dictFunctor) {
+    return Optic_Lens.lens(function (v) {
+        return v.length;
+    })(function (v) {
+        return function (v1) {
+            var $107 = {};
+            for (var $108 in v) {
+                if ({}.hasOwnProperty.call(v, $108)) {
+                    $107[$108] = v[$108];
+                };
+            };
+            $107.length = v1;
+            return $107;
         };
     })(dictFunctor);
 };
@@ -27798,9 +27818,9 @@ var ntS3 = new Data_Newtype.Newtype(function (n) {
 var ntC = new Data_Newtype.Newtype(function (n) {
     return n;
 }, Config);
-var mkPartStr = function (v) {
+var mkPartStr = function (n) {
     return function (e) {
-        return Data_Show.show(Data_Show.showInt)(v.num + 1 | 0) + (":" + e);
+        return Data_Show.show(Data_Show.showInt)(n + 1 | 0) + (":" + e);
     };
 };
 var mkFormData = function (ts) {
@@ -27817,45 +27837,19 @@ var makeS3Headers = function (ps) {
         return Network_HTTP_RequestHeader.RequestHeader.create(n)(convert(Control_Monad_Except.runExcept(Data_Foreign_Index.ix(Data_Foreign_Index.indexableForeign)(Data_Foreign_Index.indexString)(ps)(n))));
     })(ks);
 };
-var uploadToS3 = Control_Monad_Rec_Class.forever(Pipes_Internal.monadRecProxy(Control_Monad_RWS_Trans.monadRWST(Control_Monad_Aff.monadAff)(Data_List_Types.monoidList)))(Control_Bind.bind(Pipes_Internal.bindProxy(Control_Monad_RWS_Trans.monadRWST(Control_Monad_Aff.monadAff)(Data_List_Types.monoidList)))(Pipes["await"](Control_Monad_RWS_Trans.monadRWST(Control_Monad_Aff.monadAff)(Data_List_Types.monoidList)))(function (v) {
-    var s3 = Control_Monad_Except.runExcept(Simple_JSON["readJSON'"](rfS3)(v.value1));
-    if (s3 instanceof Data_Either.Left) {
-        return Control_Monad_Trans_Class.lift(Pipes_Internal.monadTransProxy)(Control_Monad_RWS_Trans.monadRWST(Control_Monad_Aff.monadAff)(Data_List_Types.monoidList))(Control_Monad_Eff_Class.liftEff(Control_Monad_RWS_Trans.monadEffRWS(Data_List_Types.monoidList)(Control_Monad_Aff.monadEffAff))(Control_Monad_Eff_Exception["throw"](Data_Show.show(Data_List_Types.showNonEmptyList(Data_Foreign.showForeignError))(s3.value0))));
-    };
-    if (s3 instanceof Data_Either.Right) {
-        return Control_Bind.bind(Pipes_Internal.bindProxy(Control_Monad_RWS_Trans.monadRWST(Control_Monad_Aff.monadAff)(Data_List_Types.monoidList)))(Control_Monad_Trans_Class.lift(Pipes_Internal.monadTransProxy)(Control_Monad_RWS_Trans.monadRWST(Control_Monad_Aff.monadAff)(Data_List_Types.monoidList))(Control_Monad_Trans_Class.lift(Control_Monad_RWS_Trans.monadTransRWST(Data_List_Types.monoidList))(Control_Monad_Aff.monadAff)(readAsArrayBuffer(Optic_Getter.weiv(v.value0)(partSlice(Data_Const.functorConst))))))(function (v1) {
-            var hs = makeS3Headers(s3.value0.headers);
-            var aff = Network_HTTP_Affjax.retry(Network_HTTP_Affjax_Request.requestableUint8Array)(Network_HTTP_Affjax.defaultRetryPolicy)(Network_HTTP_Affjax.affjax(Network_HTTP_Affjax_Request.requestableUint8Array)(Network_HTTP_Affjax_Response.responsableString))((function () {
-                var $112 = {};
-                for (var $113 in Network_HTTP_Affjax.defaultRequest) {
-                    if ({}.hasOwnProperty.call(Network_HTTP_Affjax.defaultRequest, $113)) {
-                        $112[$113] = Network_HTTP_Affjax["defaultRequest"][$113];
-                    };
-                };
-                $112.url = s3.value0.url;
-                $112.headers = hs;
-                $112.method = new Data_Either.Left(Data_HTTP_Method.PUT.value);
-                $112.content = new Data_Maybe.Just(Data_ArrayBuffer_Typed.asUint8Array(Data_ArrayBuffer_DataView.whole(v1)));
-                return $112;
-            })());
-            return Pipes["yield"](Control_Monad_RWS_Trans.monadRWST(Control_Monad_Aff.monadAff)(Data_List_Types.monoidList))(new Data_Tuple.Tuple(v.value0, aff));
-        });
-    };
-    throw new Error("Failed pattern match at Main line 267, column 3 - line 279, column 29: " + [ s3.constructor.name ]);
-}));
 var location = function (dictFunctor) {
     return Optic_Lens.lens(function (v) {
         return v.location;
     })(function (v) {
         return function (v1) {
-            var $118 = {};
-            for (var $119 in v) {
-                if ({}.hasOwnProperty.call(v, $119)) {
-                    $118[$119] = v[$119];
+            var $114 = {};
+            for (var $115 in v) {
+                if ({}.hasOwnProperty.call(v, $115)) {
+                    $114[$115] = v[$115];
                 };
             };
-            $118.location = v1;
-            return $118;
+            $114.location = v1;
+            return $114;
         };
     })(dictFunctor);
 };
@@ -27865,35 +27859,62 @@ var initialParams = {
     upload_id: "", 
     uri: ""
 };
-var getFileType = function ($166) {
-    return Data_Maybe.fromMaybe(Data_MediaType_Common.applicationOctetStream)(DOM_File_Blob.type_($166));
+var getS3Req = Control_Monad_Rec_Class.forever(Pipes_Internal.monadRecProxy(Control_Monad_RWS_Trans.monadRWST(Control_Monad_Aff.monadAff)(Data_List_Types.monoidList)))(Control_Bind.bind(Pipes_Internal.bindProxy(Control_Monad_RWS_Trans.monadRWST(Control_Monad_Aff.monadAff)(Data_List_Types.monoidList)))(Pipes["await"](Control_Monad_RWS_Trans.monadRWST(Control_Monad_Aff.monadAff)(Data_List_Types.monoidList)))(function (v) {
+    var s3 = Control_Monad_Except.runExcept(Simple_JSON["readJSON'"](rfS3)(v.value1));
+    if (s3 instanceof Data_Either.Left) {
+        return Control_Monad_Trans_Class.lift(Pipes_Internal.monadTransProxy)(Control_Monad_RWS_Trans.monadRWST(Control_Monad_Aff.monadAff)(Data_List_Types.monoidList))(Control_Monad_Eff_Class.liftEff(Control_Monad_RWS_Trans.monadEffRWS(Data_List_Types.monoidList)(Control_Monad_Aff.monadEffAff))(Control_Monad_Eff_Console.log(Data_Show.show(Data_List_Types.showNonEmptyList(Data_Foreign.showForeignError))(s3.value0))));
+    };
+    if (s3 instanceof Data_Either.Right) {
+        var hs = makeS3Headers(s3.value0.headers);
+        var buf = Optic_Getter.weiv(v.value0)(partSlice(Data_Const.functorConst));
+        var aff = Network_HTTP_Affjax.retry(Network_HTTP_Affjax_Request.requestableUint8Array)(Network_HTTP_Affjax.defaultRetryPolicy)(Network_HTTP_Affjax.affjax(Network_HTTP_Affjax_Request.requestableUint8Array)(Network_HTTP_Affjax_Response.responsableString))((function () {
+            var $120 = {};
+            for (var $121 in Network_HTTP_Affjax.defaultRequest) {
+                if ({}.hasOwnProperty.call(Network_HTTP_Affjax.defaultRequest, $121)) {
+                    $120[$121] = Network_HTTP_Affjax["defaultRequest"][$121];
+                };
+            };
+            $120.url = s3.value0.url;
+            $120.headers = hs;
+            $120.method = new Data_Either.Left(Data_HTTP_Method.PUT.value);
+            $120.content = new Data_Maybe.Just(Data_ArrayBuffer_Typed.asUint8Array(Data_ArrayBuffer_DataView.whole(buf)));
+            return $120;
+        })());
+        return Pipes["yield"](Control_Monad_RWS_Trans.monadRWST(Control_Monad_Aff.monadAff)(Data_List_Types.monoidList))(new Data_Tuple.Tuple(v.value0, aff));
+    };
+    throw new Error("Failed pattern match at Main line 270, column 3 - line 282, column 29: " + [ s3.constructor.name ]);
+}));
+var getFileType = function ($172) {
+    return Data_Maybe.fromMaybe(Data_MediaType_Common.applicationOctetStream)(DOM_File_Blob.type_($172));
 };
 var parts = (function () {
     var go = function (n) {
-        return Control_Bind.bind(Pipes_Internal.bindProxy(Control_Monad_RWS_Trans.monadRWST(Control_Monad_Aff.monadAff)(Data_List_Types.monoidList)))(Control_Monad_Reader_Class.ask(Pipes_Internal.proxyMonadAsk(Control_Monad_RWS_Trans.monadAskRWST(Control_Monad_Aff.monadAff)(Data_List_Types.monoidList))))(function (v) {
+        return Control_Bind.bind(Pipes_Internal.bindProxy(Control_Monad_RWS_Trans.monadRWST(Control_Monad_Aff.monadAff)(Data_List_Types.monoidList)))(Control_Monad_Trans_Class.lift(Pipes_Internal.monadTransProxy)(Control_Monad_RWS_Trans.monadRWST(Control_Monad_Aff.monadAff)(Data_List_Types.monoidList))(Control_Monad_Reader_Class.ask(Control_Monad_RWS_Trans.monadAskRWST(Control_Monad_Aff.monadAff)(Data_List_Types.monoidList))))(function (v) {
             return Control_Bind.bind(Pipes_Internal.bindProxy(Control_Monad_RWS_Trans.monadRWST(Control_Monad_Aff.monadAff)(Data_List_Types.monoidList)))(Control_Monad_Trans_Class.lift(Pipes_Internal.monadTransProxy)(Control_Monad_RWS_Trans.monadRWST(Control_Monad_Aff.monadAff)(Data_List_Types.monoidList))(Control_Monad_State_Class.get(Control_Monad_RWS_Trans.monadStateRWST(Control_Monad_Aff.monadAff)(Data_List_Types.monoidList))))(function (v1) {
-                var total = DOM_File_Blob.size(v1.file);
+                var totalSize = DOM_File_Blob.size(v1.file);
                 var ps = Data_Int.toNumber(Optic_Getter.weiv(v)(partSize(Data_Const.functorConst)));
-                var numParts = Data_Int.ceil(total / ps);
+                var numParts = Data_Int.ceil(totalSize / ps);
                 var num = Data_Int.toNumber(n);
                 var startByte = DOM_File_Blob.idxFromNumber(num * ps);
                 var mediatype = getFileType(v1.file);
-                var endByte = DOM_File_Blob.idxFromNumber(Data_Ord.min(Data_Ord.ordNumber)(num * ps + ps)(total));
+                var endByte = DOM_File_Blob.idxFromNumber(Data_Ord.min(Data_Ord.ordNumber)(num * ps + ps)(totalSize));
                 var slice$prime = DOM_File_Blob.slice(mediatype)(startByte)(endByte);
                 var blob = slice$prime(v1.file);
-                return Control_Bind.discard(Control_Bind.discardUnit)(Pipes_Internal.bindProxy(Control_Monad_RWS_Trans.monadRWST(Control_Monad_Aff.monadAff)(Data_List_Types.monoidList)))(Control_Applicative.unless(Pipes_Internal.applicativeProxy(Control_Monad_RWS_Trans.monadRWST(Control_Monad_Aff.monadAff)(Data_List_Types.monoidList)))(n === numParts)(Control_Bind.discard(Control_Bind.discardUnit)(Pipes_Internal.bindProxy(Control_Monad_RWS_Trans.monadRWST(Control_Monad_Aff.monadAff)(Data_List_Types.monoidList)))(Control_Monad_Trans_Class.lift(Pipes_Internal.monadTransProxy)(Control_Monad_RWS_Trans.monadRWST(Control_Monad_Aff.monadAff)(Data_List_Types.monoidList))(Control_Monad_Eff_Class.liftEff(Control_Monad_RWS_Trans.monadEffRWS(Data_List_Types.monoidList)(Control_Monad_Aff.monadEffAff))(Control_Monad_Eff_Console.log("Slicing part " + (Data_Show.show(Data_Show.showInt)(n + 1 | 0) + (" of " + (Data_Show.show(Data_Show.showInt)(numParts) + (" with size: " + Data_Show.show(Data_Show.showInt)(Data_Int.round(DOM_File_Blob.size(blob)))))))))))(function () {
+                var length = Data_Int.round(DOM_File_Blob.size(blob));
+                return Control_Applicative.unless(Pipes_Internal.applicativeProxy(Control_Monad_RWS_Trans.monadRWST(Control_Monad_Aff.monadAff)(Data_List_Types.monoidList)))(n === numParts)(Control_Bind.discard(Control_Bind.discardUnit)(Pipes_Internal.bindProxy(Control_Monad_RWS_Trans.monadRWST(Control_Monad_Aff.monadAff)(Data_List_Types.monoidList)))(Control_Monad_Trans_Class.lift(Pipes_Internal.monadTransProxy)(Control_Monad_RWS_Trans.monadRWST(Control_Monad_Aff.monadAff)(Data_List_Types.monoidList))(Control_Monad_Eff_Class.liftEff(Control_Monad_RWS_Trans.monadEffRWS(Data_List_Types.monoidList)(Control_Monad_Aff.monadEffAff))(Control_Monad_Eff_Console.log("Slicing part " + (Data_Show.show(Data_Show.showInt)(n + 1 | 0) + (" of " + (Data_Show.show(Data_Show.showInt)(numParts) + (" with length: " + Data_Show.show(Data_Show.showInt)(length)))))))))(function () {
                     return Control_Bind.bind(Pipes_Internal.bindProxy(Control_Monad_RWS_Trans.monadRWST(Control_Monad_Aff.monadAff)(Data_List_Types.monoidList)))(Control_Monad_Trans_Class.lift(Pipes_Internal.monadTransProxy)(Control_Monad_RWS_Trans.monadRWST(Control_Monad_Aff.monadAff)(Data_List_Types.monoidList))(Control_Monad_Trans_Class.lift(Control_Monad_RWS_Trans.monadTransRWST(Data_List_Types.monoidList))(Control_Monad_Aff.monadAff)(readAsArrayBuffer(blob))))(function (v2) {
                         return Control_Bind.bind(Pipes_Internal.bindProxy(Control_Monad_RWS_Trans.monadRWST(Control_Monad_Aff.monadAff)(Data_List_Types.monoidList)))(Control_Monad_Trans_Class.lift(Pipes_Internal.monadTransProxy)(Control_Monad_RWS_Trans.monadRWST(Control_Monad_Aff.monadAff)(Data_List_Types.monoidList))(Control_Monad_Eff_Class.liftEff(Control_Monad_RWS_Trans.monadEffRWS(Data_List_Types.monoidList)(Control_Monad_Aff.monadEffAff))(sparkMD5(v2))))(function (v3) {
-                            return Pipes["yield"](Control_Monad_RWS_Trans.monadRWST(Control_Monad_Aff.monadAff)(Data_List_Types.monoidList))({
+                            return Control_Bind.discard(Control_Bind.discardUnit)(Pipes_Internal.bindProxy(Control_Monad_RWS_Trans.monadRWST(Control_Monad_Aff.monadAff)(Data_List_Types.monoidList)))(Pipes["yield"](Control_Monad_RWS_Trans.monadRWST(Control_Monad_Aff.monadAff)(Data_List_Types.monoidList))({
                                 num: n, 
-                                slice: blob, 
+                                slice: v2, 
+                                length: length, 
                                 md5: v3
+                            }))(function () {
+                                return go(n + 1 | 0);
                             });
                         });
                     });
-                })))(function () {
-                    return go(n + 1 | 0);
-                });
+                }));
             });
         });
     };
@@ -27904,14 +27925,14 @@ var apikey = function (dictFunctor) {
         return v.apikey;
     })(function (v) {
         return function (v1) {
-            var $125 = {};
-            for (var $126 in v) {
-                if ({}.hasOwnProperty.call(v, $126)) {
-                    $125[$126] = v[$126];
+            var $130 = {};
+            for (var $131 in v) {
+                if ({}.hasOwnProperty.call(v, $131)) {
+                    $130[$131] = v[$131];
                 };
             };
-            $125.apikey = v1;
-            return $125;
+            $130.apikey = v1;
+            return $130;
         };
     })(dictFunctor);
 };
@@ -27936,16 +27957,16 @@ var complete = function (total) {
                 var fields = Data_List.fromFoldable(Data_Foldable.foldableArray)([ new Data_Tuple.Tuple("mimetype", Data_Show.show(Data_Show.showString)(Data_Newtype.unwrap(Data_MediaType.newtypeMediaType)(getFileType(v.file)))), new Data_Tuple.Tuple("filename", "testfile.gif"), new Data_Tuple.Tuple("size", Data_Show.show(Data_Show.showInt)(Data_Int.round(DOM_File_Blob.size(v.file)))), Data_Tuple.Tuple.create("parts")(Data_String.joinWith(";")(tags)) ]);
                 return Control_Bind.bind(Pipes_Internal.bindProxy(Control_Monad_RWS_Trans.monadRWST(Control_Monad_Aff.monadAff)(Data_List_Types.monoidList)))(Control_Monad_Trans_Class.lift(Pipes_Internal.monadTransProxy)(Control_Monad_RWS_Trans.monadRWST(Control_Monad_Aff.monadAff)(Data_List_Types.monoidList))(getCommonFields))(function (v1) {
                     return Control_Bind.bind(Pipes_Internal.bindProxy(Control_Monad_RWS_Trans.monadRWST(Control_Monad_Aff.monadAff)(Data_List_Types.monoidList)))(Control_Monad_Trans_Class.lift(Pipes_Internal.monadTransProxy)(Control_Monad_RWS_Trans.monadRWST(Control_Monad_Aff.monadAff)(Data_List_Types.monoidList))(Control_Monad_Trans_Class.lift(Control_Monad_RWS_Trans.monadTransRWST(Data_List_Types.monoidList))(Control_Monad_Aff.monadAff)(Control_Monad_Aff.attempt(Network_HTTP_Affjax.retry(Network_HTTP_Affjax_Request.requestableFormData)(Network_HTTP_Affjax.defaultRetryPolicy)(Network_HTTP_Affjax.affjax(Network_HTTP_Affjax_Request.requestableFormData)(Network_HTTP_Affjax_Response.responsableUnit))((function () {
-                        var $140 = {};
-                        for (var $141 in Network_HTTP_Affjax.defaultRequest) {
-                            if ({}.hasOwnProperty.call(Network_HTTP_Affjax.defaultRequest, $141)) {
-                                $140[$141] = Network_HTTP_Affjax["defaultRequest"][$141];
+                        var $145 = {};
+                        for (var $146 in Network_HTTP_Affjax.defaultRequest) {
+                            if ({}.hasOwnProperty.call(Network_HTTP_Affjax.defaultRequest, $146)) {
+                                $145[$146] = Network_HTTP_Affjax["defaultRequest"][$146];
                             };
                         };
-                        $140.url = "https://upload.filestackapi.com/multipart/complete";
-                        $140.method = new Data_Either.Left(Data_HTTP_Method.POST.value);
-                        $140.content = new Data_Maybe.Just(mkFormData(Data_Semigroup.append(Data_List_Types.semigroupList)(v1)(fields)));
-                        return $140;
+                        $145.url = "https://upload.filestackapi.com/multipart/complete";
+                        $145.method = new Data_Either.Left(Data_HTTP_Method.POST.value);
+                        $145.content = new Data_Maybe.Just(mkFormData(Data_Semigroup.append(Data_List_Types.semigroupList)(v1)(fields)));
+                        return $145;
                     })())))))(function (v2) {
                         if (v2 instanceof Data_Either.Left) {
                             return Control_Monad_Trans_Class.lift(Pipes_Internal.monadTransProxy)(Control_Monad_RWS_Trans.monadRWST(Control_Monad_Aff.monadAff)(Data_List_Types.monoidList))(Control_Monad_Eff_Class.liftEff(Control_Monad_RWS_Trans.monadEffRWS(Data_List_Types.monoidList)(Control_Monad_Aff.monadEffAff))(Control_Monad_Eff_Exception["throw"]("Failed to complete S3 upload")));
@@ -27953,7 +27974,7 @@ var complete = function (total) {
                         if (v2 instanceof Data_Either.Right) {
                             return Control_Applicative.pure(Pipes_Internal.applicativeProxy(Control_Monad_RWS_Trans.monadRWST(Control_Monad_Aff.monadAff)(Data_List_Types.monoidList)))(v2.value0.response);
                         };
-                        throw new Error("Failed pattern match at Main line 303, column 7 - line 305, column 35: " + [ v2.constructor.name ]);
+                        throw new Error("Failed pattern match at Main line 306, column 7 - line 308, column 35: " + [ v2.constructor.name ]);
                     });
                 });
             });
@@ -27962,19 +27983,19 @@ var complete = function (total) {
     return go([  ])(total);
 };
 var getS3Data = Control_Monad_Rec_Class.forever(Pipes_Internal.monadRecProxy(Control_Monad_RWS_Trans.monadRWST(Control_Monad_Aff.monadAff)(Data_List_Types.monoidList)))(Control_Bind.bind(Pipes_Internal.bindProxy(Control_Monad_RWS_Trans.monadRWST(Control_Monad_Aff.monadAff)(Data_List_Types.monoidList)))(Pipes["await"](Control_Monad_RWS_Trans.monadRWST(Control_Monad_Aff.monadAff)(Data_List_Types.monoidList)))(function (v) {
-    var fields = Data_List.fromFoldable(Data_Foldable.foldableArray)([ new Data_Tuple.Tuple("size", Data_Show.show(Data_Show.showInt)(Data_Int.round(DOM_File_Blob.size(Optic_Getter.weiv(v)(partSlice(Data_Const.functorConst)))))), new Data_Tuple.Tuple("md5", Optic_Getter.weiv(v)(partMD5(Data_Const.functorConst))), new Data_Tuple.Tuple("part", Data_Int.toStringAs(Data_Int.decimal)(Optic_Getter.weiv(v)(partNum(Data_Const.functorConst)) + 1 | 0)) ]);
+    var fields = Data_List.fromFoldable(Data_Foldable.foldableArray)([ new Data_Tuple.Tuple("size", Data_Show.show(Data_Show.showInt)(Optic_Getter.weiv(v)(partLength(Data_Const.functorConst)))), new Data_Tuple.Tuple("md5", Optic_Getter.weiv(v)(partMD5(Data_Const.functorConst))), new Data_Tuple.Tuple("part", Data_Int.toStringAs(Data_Int.decimal)(Optic_Getter.weiv(v)(partNum(Data_Const.functorConst)) + 1 | 0)) ]);
     return Control_Bind.bind(Pipes_Internal.bindProxy(Control_Monad_RWS_Trans.monadRWST(Control_Monad_Aff.monadAff)(Data_List_Types.monoidList)))(Control_Monad_Trans_Class.lift(Pipes_Internal.monadTransProxy)(Control_Monad_RWS_Trans.monadRWST(Control_Monad_Aff.monadAff)(Data_List_Types.monoidList))(getCommonFields))(function (v1) {
         return Control_Bind.bind(Pipes_Internal.bindProxy(Control_Monad_RWS_Trans.monadRWST(Control_Monad_Aff.monadAff)(Data_List_Types.monoidList)))(Control_Monad_Trans_Class.lift(Pipes_Internal.monadTransProxy)(Control_Monad_RWS_Trans.monadRWST(Control_Monad_Aff.monadAff)(Data_List_Types.monoidList))(Control_Monad_Trans_Class.lift(Control_Monad_RWS_Trans.monadTransRWST(Data_List_Types.monoidList))(Control_Monad_Aff.monadAff)(Control_Monad_Aff.attempt(Network_HTTP_Affjax.retry(Network_HTTP_Affjax_Request.requestableFormData)(Network_HTTP_Affjax.defaultRetryPolicy)(Network_HTTP_Affjax.affjax(Network_HTTP_Affjax_Request.requestableFormData)(Network_HTTP_Affjax_Response.responsableString))((function () {
-            var $149 = {};
-            for (var $150 in Network_HTTP_Affjax.defaultRequest) {
-                if ({}.hasOwnProperty.call(Network_HTTP_Affjax.defaultRequest, $150)) {
-                    $149[$150] = Network_HTTP_Affjax["defaultRequest"][$150];
+            var $154 = {};
+            for (var $155 in Network_HTTP_Affjax.defaultRequest) {
+                if ({}.hasOwnProperty.call(Network_HTTP_Affjax.defaultRequest, $155)) {
+                    $154[$155] = Network_HTTP_Affjax["defaultRequest"][$155];
                 };
             };
-            $149.url = "https://upload.filestackapi.com/multipart/upload";
-            $149.method = new Data_Either.Left(Data_HTTP_Method.POST.value);
-            $149.content = new Data_Maybe.Just(mkFormData(Data_Semigroup.append(Data_List_Types.semigroupList)(v1)(fields)));
-            return $149;
+            $154.url = "https://upload.filestackapi.com/multipart/upload";
+            $154.method = new Data_Either.Left(Data_HTTP_Method.POST.value);
+            $154.content = new Data_Maybe.Just(mkFormData(Data_Semigroup.append(Data_List_Types.semigroupList)(v1)(fields)));
+            return $154;
         })())))))(function (v2) {
             if (v2 instanceof Data_Either.Left) {
                 return Control_Monad_Trans_Class.lift(Pipes_Internal.monadTransProxy)(Control_Monad_RWS_Trans.monadRWST(Control_Monad_Aff.monadAff)(Data_List_Types.monoidList))(Control_Monad_Eff_Class.liftEff(Control_Monad_RWS_Trans.monadEffRWS(Data_List_Types.monoidList)(Control_Monad_Aff.monadEffAff))(Control_Monad_Eff_Exception["throw"]("Failed to retrieve S3 metadata")));
@@ -27982,7 +28003,7 @@ var getS3Data = Control_Monad_Rec_Class.forever(Pipes_Internal.monadRecProxy(Con
             if (v2 instanceof Data_Either.Right) {
                 return Pipes["yield"](Control_Monad_RWS_Trans.monadRWST(Control_Monad_Aff.monadAff)(Data_List_Types.monoidList))(new Data_Tuple.Tuple(v, v2.value0.response));
             };
-            throw new Error("Failed pattern match at Main line 246, column 3 - line 248, column 45: " + [ v2.constructor.name ]);
+            throw new Error("Failed pattern match at Main line 249, column 3 - line 251, column 45: " + [ v2.constructor.name ]);
         });
     });
 }));
@@ -28006,20 +28027,24 @@ var upload = function (file) {
                     };
                     if (sp instanceof Data_Either.Right) {
                         return Control_Monad_State_Class.modify(Control_Monad_RWS_Trans.monadStateRWST(Control_Monad_Aff.monadAff)(Data_List_Types.monoidList))(function (s) {
-                            var $161 = {};
-                            for (var $162 in s) {
-                                if ({}.hasOwnProperty.call(s, $162)) {
-                                    $161[$162] = s[$162];
+                            var $166 = {};
+                            for (var $167 in s) {
+                                if ({}.hasOwnProperty.call(s, $167)) {
+                                    $166[$167] = s[$167];
                                 };
                             };
-                            $161.params = sp.value0;
-                            return $161;
+                            $166.params = sp.value0;
+                            return $166;
                         });
                     };
-                    throw new Error("Failed pattern match at Main line 315, column 3 - line 319, column 42: " + [ sp.constructor.name ]);
+                    throw new Error("Failed pattern match at Main line 318, column 3 - line 322, column 42: " + [ sp.constructor.name ]);
                 })())(function () {
-                    return Control_Bind.discard(Control_Bind.discardUnit)(Control_Monad_RWS_Trans.bindRWST(Control_Monad_Aff.bindAff)(Data_List_Types.monoidList))(Pipes_Core.runEffect(Control_Monad_RWS_Trans.monadRWST(Control_Monad_Aff.monadAff)(Data_List_Types.monoidList))(Pipes.composePipes(Control_Monad_RWS_Trans.monadRWST(Control_Monad_Aff.monadAff)(Data_List_Types.monoidList))(Pipes.composePipes(Control_Monad_RWS_Trans.monadRWST(Control_Monad_Aff.monadAff)(Data_List_Types.monoidList))(Pipes.composePipes(Control_Monad_RWS_Trans.monadRWST(Control_Monad_Aff.monadAff)(Data_List_Types.monoidList))(Pipes.composePipes(Control_Monad_RWS_Trans.monadRWST(Control_Monad_Aff.monadAff)(Data_List_Types.monoidList))(parts)(getS3Data))(uploadToS3))(s3Scheduler))(complete(total))))(function () {
-                        return Control_Applicative.pure(Control_Monad_RWS_Trans.applicativeRWST(Control_Monad_Aff.monadAff)(Data_List_Types.monoidList))(Data_Unit.unit);
+                    return Control_Bind.bind(Control_Monad_RWS_Trans.bindRWST(Control_Monad_Aff.bindAff)(Data_List_Types.monoidList))(Control_Monad_Trans_Class.lift(Control_Monad_RWS_Trans.monadTransRWST(Data_List_Types.monoidList))(Control_Monad_Aff.monadAff)(Pipes_Aff.spawn(Pipes_Aff.unbounded)))(function (v2) {
+                        return Control_Bind.discard(Control_Bind.discardUnit)(Control_Monad_RWS_Trans.bindRWST(Control_Monad_Aff.bindAff)(Data_List_Types.monoidList))(Pipes_Core.runEffect(Control_Monad_RWS_Trans.monadRWST(Control_Monad_Aff.monadAff)(Data_List_Types.monoidList))(Pipes.composePipes(Control_Monad_RWS_Trans.monadRWST(Control_Monad_Aff.monadAff)(Data_List_Types.monoidList))(Pipes.composePipes(Control_Monad_RWS_Trans.monadRWST(Control_Monad_Aff.monadAff)(Data_List_Types.monoidList))(Pipes.composePipes(Control_Monad_RWS_Trans.monadRWST(Control_Monad_Aff.monadAff)(Data_List_Types.monoidList))(Pipes.composePipes(Control_Monad_RWS_Trans.monadRWST(Control_Monad_Aff.monadAff)(Data_List_Types.monoidList))(parts)(getS3Data))(getS3Req))(s3Scheduler))(Pipes_Aff.toOutput(Control_Monad_Aff_Class.monadAffRWS(Control_Monad_Aff_Class.monadAffAff)(Data_List_Types.monoidList))(v2))))(function () {
+                            return Control_Bind.discard(Control_Bind.discardUnit)(Control_Monad_RWS_Trans.bindRWST(Control_Monad_Aff.bindAff)(Data_List_Types.monoidList))(Pipes_Core.runEffect(Control_Monad_RWS_Trans.monadRWST(Control_Monad_Aff.monadAff)(Data_List_Types.monoidList))(Pipes.composePipes(Control_Monad_RWS_Trans.monadRWST(Control_Monad_Aff.monadAff)(Data_List_Types.monoidList))(Pipes_Aff.fromInput(Control_Monad_Aff_Class.monadAffRWS(Control_Monad_Aff_Class.monadAffAff)(Data_List_Types.monoidList))(v2))(complete(total))))(function () {
+                                return Control_Applicative.pure(Control_Monad_RWS_Trans.applicativeRWST(Control_Monad_Aff.monadAff)(Data_List_Types.monoidList))(Data_Unit.unit);
+                            });
+                        });
                     });
                 });
             });
@@ -28050,12 +28075,14 @@ module.exports = {
     getCommonFields: getCommonFields, 
     getFileType: getFileType, 
     getS3Data: getS3Data, 
+    getS3Req: getS3Req, 
     initialParams: initialParams, 
     location: location, 
     main: main, 
     makeS3Headers: makeS3Headers, 
     mkFormData: mkFormData, 
     mkPartStr: mkPartStr, 
+    partLength: partLength, 
     partMD5: partMD5, 
     partNum: partNum, 
     partSize: partSize, 
@@ -28068,7 +28095,6 @@ module.exports = {
     start: start, 
     storeTo: storeTo, 
     upload: upload, 
-    uploadToS3: uploadToS3, 
     ntC: ntC, 
     rfC: rfC, 
     showC: showC, 
@@ -28083,7 +28109,7 @@ module.exports = {
     sparkMD5Impl: $foreign.sparkMD5Impl
 };
 
-},{"../Control.Applicative":4,"../Control.Bind":10,"../Control.Monad.Aff":21,"../Control.Monad.Aff.AVar":16,"../Control.Monad.Eff":38,"../Control.Monad.Eff.Class":26,"../Control.Monad.Eff.Console":28,"../Control.Monad.Eff.Exception":30,"../Control.Monad.Eff.Ref":32,"../Control.Monad.Except":41,"../Control.Monad.RWS.Trans":49,"../Control.Monad.Reader":52,"../Control.Monad.Reader.Class":50,"../Control.Monad.Rec.Class":53,"../Control.Monad.State":58,"../Control.Monad.State.Class":56,"../Control.Monad.Trans.Class":59,"../Control.Semigroupoid":68,"../DOM":86,"../DOM.Event.EventTarget":70,"../DOM.File.Blob":74,"../DOM.File.FileReader":77,"../DOM.File.Types":78,"../DOM.HTML.Event.EventTypes":79,"../DOM.XHR.FormData":84,"../DOM.XHR.Types":85,"../Data.Array":95,"../Data.ArrayBuffer.DataView":99,"../Data.ArrayBuffer.Typed":101,"../Data.ArrayBuffer.Types":102,"../Data.Bifunctor":109,"../Data.Const":118,"../Data.Either":121,"../Data.Eq":124,"../Data.EuclideanRing":126,"../Data.Foldable":129,"../Data.Foreign":141,"../Data.Foreign.Index":132,"../Data.Foreign.Keys":137,"../Data.Foreign.NullOrUndefined":139,"../Data.Function":145,"../Data.Function.Uncurried":144,"../Data.Functor":152,"../Data.HTTP.Method":157,"../Data.HeytingAlgebra":159,"../Data.Int":164,"../Data.List":169,"../Data.List.Types":168,"../Data.Maybe":172,"../Data.MediaType":174,"../Data.MediaType.Common":173,"../Data.Newtype":183,"../Data.Ord":190,"../Data.Ring":200,"../Data.Semigroup":204,"../Data.Semiring":206,"../Data.Show":208,"../Data.String":216,"../Data.Symbol":217,"../Data.Tuple":225,"../Data.Unit":231,"../Debug.Trace":234,"../Network.HTTP.Affjax":246,"../Network.HTTP.Affjax.Request":243,"../Network.HTTP.Affjax.Response":244,"../Network.HTTP.RequestHeader":247,"../Network.HTTP.ResponseHeader":248,"../Optic.Getter":250,"../Optic.Lens":253,"../Optic.Types":254,"../Pipes":263,"../Pipes.Aff":259,"../Pipes.Core":260,"../Pipes.Internal":261,"../Pipes.Prelude":262,"../Prelude":264,"../Simple.JSON":265,"../Type.Row":268,"./foreign":239}],241:[function(require,module,exports){
+},{"../Control.Applicative":4,"../Control.Bind":10,"../Control.Monad.Aff":21,"../Control.Monad.Aff.AVar":16,"../Control.Monad.Aff.Class":17,"../Control.Monad.Eff":38,"../Control.Monad.Eff.Class":26,"../Control.Monad.Eff.Console":28,"../Control.Monad.Eff.Exception":30,"../Control.Monad.Eff.Ref":32,"../Control.Monad.Except":41,"../Control.Monad.RWS.Trans":49,"../Control.Monad.Reader":52,"../Control.Monad.Reader.Class":50,"../Control.Monad.Rec.Class":53,"../Control.Monad.State":58,"../Control.Monad.State.Class":56,"../Control.Monad.Trans.Class":59,"../Control.Semigroupoid":68,"../DOM":86,"../DOM.Event.EventTarget":70,"../DOM.File.Blob":74,"../DOM.File.FileReader":77,"../DOM.File.Types":78,"../DOM.HTML.Event.EventTypes":79,"../DOM.XHR.FormData":84,"../DOM.XHR.Types":85,"../Data.Array":95,"../Data.ArrayBuffer.DataView":99,"../Data.ArrayBuffer.Typed":101,"../Data.ArrayBuffer.Types":102,"../Data.Bifunctor":109,"../Data.Const":118,"../Data.Either":121,"../Data.Eq":124,"../Data.EuclideanRing":126,"../Data.Foldable":129,"../Data.Foreign":141,"../Data.Foreign.Index":132,"../Data.Foreign.Keys":137,"../Data.Foreign.NullOrUndefined":139,"../Data.Function":145,"../Data.Function.Uncurried":144,"../Data.Functor":152,"../Data.HTTP.Method":157,"../Data.HeytingAlgebra":159,"../Data.Int":164,"../Data.List":169,"../Data.List.Types":168,"../Data.Maybe":172,"../Data.MediaType":174,"../Data.MediaType.Common":173,"../Data.Newtype":183,"../Data.Ord":190,"../Data.Ring":200,"../Data.Semigroup":204,"../Data.Semiring":206,"../Data.Show":208,"../Data.String":216,"../Data.Symbol":217,"../Data.Traversable":222,"../Data.Tuple":225,"../Data.Unit":231,"../Debug.Trace":234,"../Network.HTTP.Affjax":246,"../Network.HTTP.Affjax.Request":243,"../Network.HTTP.Affjax.Response":244,"../Network.HTTP.RequestHeader":247,"../Network.HTTP.ResponseHeader":248,"../Optic.Getter":250,"../Optic.Lens":253,"../Optic.Types":254,"../Pipes":263,"../Pipes.Aff":259,"../Pipes.Core":260,"../Pipes.Internal":261,"../Pipes.Prelude":262,"../Prelude":264,"../Simple.JSON":265,"../Type.Row":268,"./foreign":239}],241:[function(require,module,exports){
 "use strict";
 
 // module Math

@@ -36,12 +36,13 @@ import Data.Foreign.NullOrUndefined (NullOrUndefined, unNullOrUndefined)
 import Data.Function.Uncurried (Fn1, runFn1)
 import Data.HTTP.Method (Method(..))
 import Data.Int (toNumber, ceil, round, toStringAs, decimal)
-import Data.List (List, filter, fromFoldable)
+import Data.List (List, filter, fromFoldable, range)
 import Data.Maybe (Maybe(..), fromMaybe)
 import Data.MediaType.Common (applicationOctetStream)
 import Data.MediaType (MediaType)
 import Data.Newtype (class Newtype, unwrap)
 import Data.String (null, joinWith)
+import Data.Traversable (traverse)
 import Data.Tuple (Tuple(..))
 import Network.HTTP.Affjax (AJAX, AffjaxResponse, affjax, post, defaultRequest, retry, defaultRetryPolicy)
 import Network.HTTP.RequestHeader (RequestHeader(..))
@@ -49,10 +50,10 @@ import Network.HTTP.ResponseHeader (responseHeaderName, responseHeaderValue)
 import Optic.Getter ((^.))
 import Optic.Lens (lens)
 import Optic.Types (Lens, Lens')
-import Pipes ((>->), await, each, for, yield)
+import Pipes ((>->), (>~), await, each, for, yield)
 import Pipes.Core (Consumer, Pipe, Producer, runEffect)
 import Pipes.Prelude as P
-import Pipes.Aff (spawn, unbounded, toOutput, fromInput)
+import Pipes.Aff (Channel, send, spawn, unbounded, toOutput, fromInput)
 
 import Simple.JSON (class ReadForeign, read, readJSON')
 import Debug.Trace (traceAnyA)
@@ -129,15 +130,18 @@ location = lens _.location (_ { location = _ })
 --
 newtype Part = Part
   { num :: Int
-  , slice :: Blob
+  , slice :: ArrayBuffer
   , md5 :: String
+  , length :: Int
   }
-partSlice :: Lens' Part Blob
+partSlice :: Lens' Part ArrayBuffer
 partSlice  = lens (\(Part x) -> x.slice) (\(Part x) v -> Part x { slice = v })
 partNum :: Lens' Part Int
 partNum  = lens (\(Part x) -> x.num) (\(Part x) v -> Part x { num = v })
 partMD5 :: Lens' Part String
 partMD5 = lens (\(Part x) -> x.md5) (\(Part x) v -> Part x { md5 = v })
+partLength :: Lens' Part Int
+partLength = lens (\(Part x) -> x.length) (\(Part x) v -> Part x { length = v })
 
 instance showPart :: Show Part where
   show (Part p) =
@@ -170,31 +174,30 @@ getFileType = fromMaybe applicationOctetStream <<< type_
 parts :: Producer Part (Env (Aff Effects)) Unit
 parts = go 0 where
   go n = do
-    Config cfg <- ask
+    Config cfg <- lift ask
     state <- lift get
     let ps = toNumber $ cfg ^. partSize
-        total = size state.file
+        totalSize = size state.file
+        numParts = ceil $ totalSize / ps
         mediatype = getFileType state.file
-        numParts = ceil $ total / ps
         slice' = slice mediatype (StartByte startByte) (EndByte endByte)
         num = toNumber n
         startByte = idxFromNumber $ num * ps
-        endByte = idxFromNumber $ min (num * ps + ps) total
+        endByte = idxFromNumber $ min (num * ps + ps) totalSize
         blob = slice' state.file
+        length = round $ size blob
     unless (n == numParts) do
       lift $ liftEff $ log $
-        "Slicing part " <> show (n + 1)
-                        <> " of "
-                        <> show numParts
-                        <> " with size: "
-                        <> show (round $ size blob)
+        "Slicing part "
+        <> show (n + 1)
+        <> " of "
+        <> show numParts
+        <> " with length: "
+        <> show length
       buf <- lift $ lift $ readAsArrayBuffer blob
       md5 <- lift $ liftEff $ runFn1 sparkMD5 buf
-      yield $ Part { num: n
-                   , slice: blob
-                   , md5: md5
-                   }
-    go (n + 1)
+      yield $ Part { num: n, slice: buf, length: length, md5: md5 }
+      go $ n + 1
 
 -- Type for key/value pairs that we will convert to FormData
 type Fields = List (Tuple String String)
@@ -233,7 +236,7 @@ start file = do
 getS3Data :: Pipe Part (Tuple Part String) (Env (Aff Effects)) Unit
 getS3Data = forever $ do
   part <- await
-  let fields = fromFoldable [ Tuple "size" (show <<< round <<< size $ part ^. partSlice)
+  let fields = fromFoldable [ Tuple "size" (show $ part ^. partLength)
                             , Tuple "md5" (part ^. partMD5)
                             , Tuple "part" (toStringAs decimal $ (part ^. partNum) + 1)
                             ]
@@ -260,33 +263,33 @@ makeS3Headers ps = (\n -> RequestHeader n $ convert (runExcept $ ix ps n)) <$> k
   where ks = either (const []) (\a -> a) (runExcept $ keys ps)
         convert = either (const "") (\v -> unsafeFromForeign v :: String)
 
-uploadToS3 :: Pipe (Tuple Part String) (Tuple Part (Aff Effects (AffjaxResponse String))) (Env (Aff Effects)) Unit
-uploadToS3 = forever $ do
+getS3Req :: Pipe (Tuple Part String) (Tuple Part (Aff Effects (AffjaxResponse String))) (Env (Aff Effects)) Unit
+getS3Req = forever $ do
   (Tuple part s3p) <- await
   let s3 = runExcept (readJSON' s3p :: F S3Params)
   case s3 of
     Left e ->
-      lift $ liftEff $ throw $ show e
+      lift $ liftEff $ log $ show e
     Right (S3Params params) -> do
-      bytes <- lift $ lift $ readAsArrayBuffer (part ^. partSlice)
       let hs = makeS3Headers params.headers
+          buf = part ^. partSlice
           aff = retry defaultRetryPolicy affjax $ defaultRequest
             { url = params.url
             , headers = hs
             , method = Left PUT
-            , content = Just (asUint8Array $ whole bytes)
+            , content = Just (asUint8Array $ whole buf)
             }
       yield $ Tuple part aff
 
-mkPartStr :: Part -> String -> String
-mkPartStr (Part p) e = show (p.num + 1) <> ":" <> e
+mkPartStr :: Int -> String -> String
+mkPartStr n e = show (n + 1) <> ":" <> e
 
-complete :: Int -> Consumer (Tuple Part String) (Env (Aff Effects)) Unit
+complete :: Int -> Consumer (Tuple Int String) (Env (Aff Effects)) Unit
 complete total = go [] total
   where
     go tags n | n /= 0 = do
-      (Tuple part etag) <- await
-      go (tags <> [mkPartStr part etag]) (n - 1)
+      (Tuple num etag) <- await
+      go (tags <> [mkPartStr num etag]) (n - 1)
     go tags n = do
       state <- lift get
       let fields = fromFoldable [ Tuple "mimetype" (show <<< unwrap $ getFileType state.file)
@@ -317,14 +320,15 @@ upload file = do
       lift $ liftEff $ throw "Start parameters could not be parsed"
     Right params ->
       modify (\s -> s{ params = params })
-  {-- s3Channel <- lift $ spawn unbounded --}
+  s3Channel <- lift $ spawn unbounded
   runEffect $ parts >-> getS3Data
-                    >-> uploadToS3
+                    >-> getS3Req
                     >-> s3Scheduler
-                    >-> complete total
+                    >-> toOutput s3Channel
+  runEffect $ fromInput s3Channel >-> complete total
   pure unit
 
-s3Scheduler :: Pipe (Tuple Part (Aff Effects (AffjaxResponse String))) (Tuple Part String) (Env (Aff Effects)) Unit
+s3Scheduler :: Pipe (Tuple Part (Aff Effects (AffjaxResponse String))) (Tuple Int String) (Env (Aff Effects)) Unit
 s3Scheduler = forever $ do
   (Tuple part aff) <- await
   -- TODO Don't fork if we hit concurrency limit
@@ -332,7 +336,8 @@ s3Scheduler = forever $ do
   res <- lift $ lift $ joinFiber fiber
   let etagHeader = res.headers # A.filter (\s -> responseHeaderName s == "etag")
       etag = (responseHeaderValue <$> etagHeader) # joinWith ""
-  yield $ Tuple part etag
+  traceAnyA part
+  yield (Tuple (part ^. partNum) etag)
 
 type Effects =
   ( ajax :: AJAX
