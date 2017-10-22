@@ -1,0 +1,28 @@
+{
+  "name": "filestack-purescript",
+  "version": "1.0.0",
+  "description": "",
+  "main": "index.js",
+  "directories": {
+    "test": "test"
+  },
+  "dependencies": {
+    "spark-md5": "^3.0.0",
+    "webworkify": "^1.4.0"
+  },
+  "devDependencies": {},
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1",
+    "start": "pulp -w browserify -O --standalone filestack --to index.js"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/velveteer/filestack-purescript.git"
+  },
+  "author": "Filestack (https://filestack.com)",
+  "license": "ISC",
+  "bugs": {
+    "url": "https://github.com/velveteer/filestack-purescript/issues"
+  },
+  "homepage": "https://github.com/velveteer/filestack-purescript#readme"
+}

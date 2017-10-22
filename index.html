@@ -6,14 +6,20 @@
     <script>
       var config = {
         apikey: 'Ag8sEzKMtSqq2dHyOyeK1z',
+        concurrency: 1,
         partSize: 6 * 1024 * 1024,
         storeTo: {
           location: 's3',
+          region: '',
+          container: '',
+          path: '',
+          access: ''
         },
       };
       function loadFile(e) {
         console.log('loading');
-        filestack.main()(e.files[0])(config)();
+        const file = e.files[0];
+        filestack.main()(e.files[0])(file.name)(config)();
       }
     </script>
   </body>
