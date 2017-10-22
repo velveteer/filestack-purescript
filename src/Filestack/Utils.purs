@@ -70,17 +70,15 @@ getDefault d = fromMaybe d <<< unNullOrUndefined
 getCommonFields :: State -> Fields
 getCommonFields state = do
   let cfg = unwrap state.cfg
-      so = unwrap (cfg ^. storeTo)
-      sp = unwrap (state.params)
-      base = fromFoldable
-        [ Tuple "region" sp.region
-        , Tuple "upload_id" sp.upload_id
-        , Tuple "uri" sp.uri
-        , Tuple "location_url" sp.location_url
-        , Tuple "apikey" $ cfg ^. apikey
-        ] # filter (\(Tuple k v) -> null v /= true)
-  base <> fromFoldable
-      [ Tuple "store_location" so.location
+      so  = unwrap $ cfg ^. storeTo
+      sp  = unwrap state.params
+  fromFoldable
+      [ Tuple "region" sp.region
+      , Tuple "upload_id" sp.upload_id
+      , Tuple "uri" sp.uri
+      , Tuple "location_url" sp.location_url
+      , Tuple "apikey" $ cfg ^. apikey
+      , Tuple "store_location" so.location
       , Tuple "store_region" so.region
       , Tuple "store_container" so.container
       , Tuple "store_path" so.path
