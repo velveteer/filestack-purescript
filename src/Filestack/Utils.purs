@@ -58,7 +58,6 @@ readAs readMethod getResult blob = makeAff \cb -> do
 readAsArrayBuffer :: forall eff. Blob -> Aff (dom :: DOM | eff) ArrayBuffer
 readAsArrayBuffer = readAs (unsafeReadTagged "ArrayBuffer") FileReader.readAsArrayBuffer
 
-
 getFileType :: Blob -> MediaType
 getFileType = fromMaybe applicationOctetStream <<< type_
 

@@ -25,7 +25,7 @@ import Data.HTTP.Method (Method(..))
 import Data.List (fromFoldable)
 import Data.Maybe (Maybe(..))
 import Data.Newtype (class Newtype, unwrap)
-import Data.String (joinWith)
+import Data.String (toLower, joinWith)
 import Data.Tuple (Tuple(..))
 import DOM.File.Blob (slice, size, idxFromNumber, StartByte(..), EndByte(..))
 import Network.HTTP.Affjax (AffjaxResponse, affjax, defaultRequest, retry, defaultRetryPolicy)
@@ -105,23 +105,21 @@ makeS3Headers ps = (\n -> RequestHeader n $ convert (runExcept $ ix ps n)) <$> k
 
 getEtag :: AffjaxResponse String -> String
 getEtag res = (responseHeaderValue <$> etagHeader) # joinWith ""
-  where etagHeader = res.headers # A.filter (\s -> responseHeaderName s == "etag")
+  where etagHeader = res.headers # A.filter (\s -> toLower (responseHeaderName s) == "etag")
 
 makeS3Req :: Pipe (Tuple Part String) String (Aff Effects) Unit
 makeS3Req = do
   (Tuple part s3p) <- await
   let s3 = runExcept (readJSON' s3p :: F S3Params)
   case s3 of
-    Left e ->
-      liftEff $ throw $ show e
+    Left e -> liftEff $ throw $ show e
     Right (S3Params params) -> do
-      buf <- lift $ readAsArrayBuffer $ part ^. partSlice
       let hs = makeS3Headers params.headers
-          aff = retry defaultRetryPolicy affjax $ defaultRequest
+          aff = affjax $ defaultRequest
             { url = params.url
             , headers = hs
             , method = Left PUT
-            , content = Just (asUint8Array $ whole buf)
+            , content = Just (part ^. partSlice)
             }
       res <- lift $ attempt aff
       case res of
