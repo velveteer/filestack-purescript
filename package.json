@@ -11,10 +11,17 @@
   },
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1",
+    "dist": "npm run build && npm run prepack && npm run closure",
     "build": "npm run build-main && npm run build-worker",
     "build-worker": "pulp browserify -j 4 -O -I worker -m Upload --to build/upload.js",
     "build-main": "pulp browserify -j 4 -O --standalone filestack --to build/index.js",
     "start": "pulp -w browserify -O --standalone filestack --to build/index.js",
+    "closure": "npm run closure-index && npm run closure-worker",
+    "prepack": "npm run prepack-index && npm run prepack-worker",
+    "prepack-index": "prepack build/index.js --out build/index.js.packed",
+    "prepack-worker": "prepack build/upload.js --out build/upload.js.packed",
+    "closure-index": "java -jar ./bin/closure.jar --js_output_file=dist/index.js build/index.js.packed",
+    "closure-worker": "java -jar ./bin/closure.jar --js_output_file=dist/upload.js build/upload.js.packed",
     "postinstall": "bower install"
   },
   "repository": {
@@ -26,5 +33,8 @@
   "bugs": {
     "url": "https://github.com/velveteer/filestack-purescript/issues"
   },
-  "homepage": "https://github.com/velveteer/filestack-purescript#readme"
+  "homepage": "https://github.com/velveteer/filestack-purescript#readme",
+  "devDependencies": {
+    "prepack": "^0.2.10"
+  }
 }

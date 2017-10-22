@@ -117,6 +117,7 @@ type State =
   , name :: String
   , cfg :: Config
   , partNum :: Int
+  , total :: Int
   }
 
 initialParams :: Params

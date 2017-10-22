@@ -7,8 +7,6 @@ import Control.Monad.Eff (Eff)
 import Control.Monad.Eff.Class (liftEff)
 import Control.Monad.Eff.Console (log)
 import Control.Monad.Eff.Exception (throw)
-{-- import Control.Monad.Eff.Worker (WORKER, WorkerModule) --}
-{-- import Control.Monad.Eff.Worker.Slave (onMessage, sendMessage) --}
 import Control.Monad.Except (runExcept)
 import Control.Monad.Trans.Class (lift)
 import Data.Array as A
@@ -27,6 +25,7 @@ import Data.Newtype (class Newtype, unwrap)
 import Data.String (toLower, joinWith)
 import Data.Tuple (Tuple(..))
 import DOM.File.Blob (slice, size, idxFromNumber, StartByte(..), EndByte(..))
+import GlobalScope.Dedicated (onMessage, postMessage)
 import Network.HTTP.Affjax (AffjaxResponse, affjax, defaultRequest)
 import Network.HTTP.RequestHeader (RequestHeader(..))
 import Network.HTTP.ResponseHeader (responseHeaderName, responseHeaderValue)
@@ -35,7 +34,6 @@ import Pipes ((>->), yield, await)
 import Pipes.Core (Consumer, Pipe, Producer, runEffect)
 import Pipes.Prelude (drain)
 import Simple.JSON (class ReadForeign, readJSON')
-import GlobalScope.Dedicated (onMessage, postMessage)
 {-- import Debug.Trace (traceAnyA) --}
 
 import Filestack.Types
@@ -55,8 +53,6 @@ import Filestack.Utils
   , readAsArrayBuffer
   , sparkMD5
   )
-
-{-- foreign import workerModule :: WorkerModule State String --}
 
 mkPart :: State -> Producer (Tuple Part State) (Aff Effects) Unit
 mkPart ctx = do
