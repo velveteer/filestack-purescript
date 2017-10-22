@@ -5,3 +5,4 @@
 /.psc*
 /.psa*
 index.js
+/build/

@@ -1,13 +1,15 @@
 module Main where
 
 import Prelude
+import Aff.Workers (postMessage)
+import Aff.Workers.Dedicated (new, onMessage)
 import Control.Monad.Aff (Aff, attempt, launchAff_)
 import Control.Monad.Eff (Eff)
 import Control.Monad.Eff.Class (liftEff)
 import Control.Monad.Eff.Exception (throw)
 import Control.Monad.Except (runExcept)
 import Control.Monad.Trans.Class (lift)
-import Control.Monad.Eff.Worker.Master (sendMessage, onMessage, startWorker)
+{-- import Control.Monad.Eff.Worker.Master (sendMessage, onMessage, startWorker) --}
 import Data.Either (Either(..), fromRight)
 import Data.Foldable (for_)
 import Data.Foreign (Foreign)
@@ -30,7 +32,7 @@ import Simple.JSON (read, readJSON')
 
 import Filestack.Utils (getFileType, getCommonFields, mkFormData)
 import Filestack.Types (Effects, Params, State, initialParams, partSize)
-import Filestack.Upload (workerModule)
+{-- import Filestack.Upload (workerModule) --}
 
 -- | Start the multipart upload flow
 start :: State -> Blob -> Aff Effects (AffjaxResponse String)
@@ -55,9 +57,9 @@ upload file ctx = do
       s3Channel <- spawn unbounded
       for_ (range 0 (total - 1)) \x -> do
         let newCtx = context{ partNum = x }
-        w1 <- liftEff $ startWorker workerModule
-        liftEff $ sendMessage w1 newCtx
-        liftEff $ onMessage w1 (\m -> launchAff_ (send m s3Channel))
+        w1 <- new "upload.js"
+        postMessage w1 newCtx
+        onMessage w1 (\m -> launchAff_ (send m s3Channel))
       runEffect $ fromInput s3Channel >-> complete context total
       pure unit
 

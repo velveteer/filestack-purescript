@@ -24,8 +24,8 @@ import Control.Monad.Aff.AVar (AVAR)
 import Control.Monad.Eff.Console (CONSOLE)
 import Control.Monad.Eff.Exception (EXCEPTION)
 import Control.Monad.Eff.Ref (REF)
-import Control.Monad.Eff.Worker (WORKER)
-import Data.ArrayBuffer.Types (ArrayBuffer)
+{-- import Control.Monad.Eff.Worker (WORKER) --}
+{-- import Data.ArrayBuffer.Types (ArrayBuffer) --}
 import Data.Foreign.NullOrUndefined (NullOrUndefined, unNullOrUndefined)
 import Data.Newtype (class Newtype)
 import Data.String (joinWith)
@@ -35,6 +35,7 @@ import Network.HTTP.Affjax (AJAX)
 import Optic.Lens (lens)
 import Optic.Types (Lens, Lens')
 import Simple.JSON (class ReadForeign)
+import Workers (WORKER)
 
 showN :: NullOrUndefined String -> String
 showN = show <<< unNullOrUndefined

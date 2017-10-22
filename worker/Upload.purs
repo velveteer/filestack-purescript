@@ -1,15 +1,14 @@
-module Filestack.Upload
-  ( default
-  , workerModule )
+module Upload
 where
 
 import Prelude
 import Control.Monad.Aff (Aff, attempt, launchAff_)
 import Control.Monad.Eff (Eff)
 import Control.Monad.Eff.Class (liftEff)
+import Control.Monad.Eff.Console (log)
 import Control.Monad.Eff.Exception (throw)
-import Control.Monad.Eff.Worker (WORKER, WorkerModule)
-import Control.Monad.Eff.Worker.Slave (onMessage, sendMessage)
+{-- import Control.Monad.Eff.Worker (WORKER, WorkerModule) --}
+{-- import Control.Monad.Eff.Worker.Slave (onMessage, sendMessage) --}
 import Control.Monad.Except (runExcept)
 import Control.Monad.Trans.Class (lift)
 import Data.Array as A
@@ -36,6 +35,7 @@ import Pipes ((>->), yield, await)
 import Pipes.Core (Consumer, Pipe, Producer, runEffect)
 import Pipes.Prelude (drain)
 import Simple.JSON (class ReadForeign, readJSON')
+import GlobalScope.Dedicated (onMessage, postMessage)
 {-- import Debug.Trace (traceAnyA) --}
 
 import Filestack.Types
@@ -56,7 +56,7 @@ import Filestack.Utils
   , sparkMD5
   )
 
-foreign import workerModule :: WorkerModule State String
+{-- foreign import workerModule :: WorkerModule State String --}
 
 mkPart :: State -> Producer (Tuple Part State) (Aff Effects) Unit
 mkPart ctx = do
@@ -138,7 +138,9 @@ uploadWorker ctx = do
 send :: Consumer String (Aff Effects) Unit
 send = do
   res <- await
-  lift $ liftEff $ sendMessage workerModule res
+  lift $ liftEff $ postMessage res
 
-default :: forall e. Eff (worker :: WORKER | e) Unit
-default = onMessage workerModule (\m -> uploadWorker m)
+main :: Eff Effects Unit
+main = do
+  log "worker loaded"
+  onMessage (\m -> uploadWorker m)
