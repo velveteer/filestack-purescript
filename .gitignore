@@ -6,3 +6,4 @@
 /.psa*
 index.js
 /build/
+/dist/

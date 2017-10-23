@@ -10,8 +10,6 @@ import Control.Monad.Eff.Exception (throw)
 import Control.Monad.Except (runExcept)
 import Control.Monad.Trans.Class (lift)
 import Data.Array as A
-{-- import Data.ArrayBuffer.DataView (whole) --}
-{-- import Data.ArrayBuffer.Typed (asUint8Array) --}
 import Data.Int (toNumber, round, toStringAs, decimal)
 import Data.Either (Either(..), either)
 import Data.Foreign (F, Foreign, unsafeFromForeign)
@@ -34,7 +32,7 @@ import Pipes ((>->), yield, await)
 import Pipes.Core (Consumer, Pipe, Producer, runEffect)
 import Pipes.Prelude (drain)
 import Simple.JSON (class ReadForeign, readJSON')
-{-- import Debug.Trace (traceAnyA) --}
+import Debug.Trace (traceAnyA)
 
 import Filestack.Types
   ( Effects
@@ -101,7 +99,7 @@ makeS3Headers ps = (\n -> RequestHeader n $ convert (runExcept $ ix ps n)) <$> k
 
 getEtag :: AffjaxResponse String -> String
 getEtag res = (responseHeaderValue <$> etagHeader) # joinWith ""
-  where etagHeader = res.headers # A.filter (\s -> toLower (responseHeaderName s) == "etag")
+  where etagHeader = res.headers # A.filter (\s -> (toLower $ responseHeaderName s) == "etag")
 
 makeS3Req :: Pipe (Tuple Part String) String (Aff Effects) Unit
 makeS3Req = do
@@ -119,7 +117,8 @@ makeS3Req = do
             }
       res <- lift $ attempt aff
       case res of
-        Left e -> liftEff $ throw (show e)
+        Left e -> do
+          liftEff $ throw (show e)
         Right res' -> do
           yield $ "" <> (show $ part ^. partNum + 1) <> ":" <> (getEtag res')
 

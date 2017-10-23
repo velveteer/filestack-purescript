@@ -6,7 +6,8 @@ import Aff.Workers.Dedicated (new, onMessage)
 import Control.Monad.Aff (Aff, attempt, launchAff_)
 import Control.Monad.Eff (Eff)
 import Control.Monad.Eff.Class (liftEff)
-import Control.Monad.Eff.Exception (throw)
+import Control.Monad.Eff.Console (log)
+import Control.Monad.Eff.Exception (Error, throw)
 import Control.Monad.Except (runExcept)
 import Control.Monad.Trans.Class (lift)
 import Data.Either (Either(..), fromRight)
@@ -27,12 +28,11 @@ import Pipes ((>->), await)
 import Pipes.Core (Consumer, runEffect)
 import Pipes.Aff (send, spawn, unbounded, fromInput)
 import Simple.JSON (read, readJSON')
-{-- import Debug.Trace (traceAnyA) --}
+import Debug.Trace (traceAnyA)
 
 import Filestack.Utils (getFileType, getCommonFields, mkFormData)
 import Filestack.Types (Effects, State, initialParams, partSize)
 
--- | Start the multipart upload flow
 start :: State -> Blob -> Aff Effects (AffjaxResponse String)
 start state file = do
   let fs = fromFoldable [ Tuple "mimetype" (show <<< unwrap $ getFileType file)
@@ -41,8 +41,11 @@ start state file = do
                         ] <> getCommonFields state # mkFormData
   post "https://upload.filestackapi.com/multipart/start" fs
 
-complete :: State -> Consumer String (Aff Effects) Unit
-complete state = go [] state.total
+complete
+  :: State
+  -> (String -> Eff Effects Unit)
+  -> Consumer String (Aff Effects) Unit
+complete state cb = go [] state.total
   where
     go tags n | n /= 0 = do
       part <- await
@@ -60,10 +63,15 @@ complete state = go [] state.total
         }
       case res of
         Left e -> lift $ liftEff $ throw $ show e
-        Right r -> pure r.response
+        Right r -> liftEff $ cb r.response
 
-upload :: Blob -> State -> Aff Effects Unit
-upload file ctx = do
+upload
+  :: Blob
+  -> State
+  -> (String -> Eff Effects Unit)
+  -> (Error -> Eff Effects Unit)
+  -> Aff Effects Unit
+upload file ctx cb eb = do
   result <- start ctx file
   let sp = runExcept (readJSON' result.response)
       cfg = unwrap ctx.cfg
@@ -79,16 +87,24 @@ upload file ctx = do
         w1 <- new "upload.js"
         postMessage w1 newCtx
         onMessage w1 (\m -> launchAff_ (send m s3Channel))
-      runEffect $ fromInput s3Channel >-> complete context
-      pure unit
+      runEffect $ fromInput s3Channel >-> complete context cb
 
-main :: Partial => Blob -> String -> Foreign -> Eff Effects Unit
-main file name cfg = launchAff_ $ upload file init
-  where init = { params: initialParams
-               , file: file
-               , name: name
-               , cfg: cfg'
-               , partNum: 0
-               , total: 0
-               }
-        cfg' = fromRight $ runExcept (read cfg)
+main
+  :: Partial
+  => Blob
+  -> String
+  -> Foreign
+  -> (String -> Eff Effects Unit)
+  -> (Error -> Eff Effects Unit)
+  -> Eff Effects Unit
+main file name cfg cb eb = do
+  log "running"
+  launchAff_ $ upload file init cb eb
+    where init = { params: initialParams
+                 , file: file
+                 , name: name
+                 , cfg: cfg'
+                 , partNum: 0
+                 , total: 0
+                 }
+          cfg' = fromRight $ runExcept (read cfg)
